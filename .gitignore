@@ -1,1 +1,12 @@
 .DS_Store
+.claude/
+.ignore/
+node_modules/
+.next/
+target/
+.env
+.env.local
+dist/
+coverage/
+playwright-report/
+test-results/
