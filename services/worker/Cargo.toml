@@ -1,0 +1,28 @@
+[package]
+name = "pqcas-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "pqcas-worker"
+path = "src/main.rs"
+
+[dependencies]
+adapter-proto = { workspace = true }
+pqcas-domain = { workspace = true }
+
+anyhow = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+futures = { workspace = true }
+redis = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }

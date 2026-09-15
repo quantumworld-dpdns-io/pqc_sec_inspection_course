@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+ * Three modules, three visual identities — PQ-CAS (slate/navy console), CAVP (institute
+ * blue with a per-capability accent) and KEM DEMO (green terminal on graph paper). Each
+ * page sets `data-module`, and everything downstream reads these variables, so the modules
+ * stay recognisable without three copies of the component library.
+ */
+@theme {
+  --color-brand-navy: #0b1728;
+  --color-brand-ink: #0f172a;
+  --color-cavp-blue: #1257a0;
+  --color-cavp-purple: #6d3fd1;
+  --color-cavp-teal: #0f766e;
+  --color-kem-green: #0f7a4f;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  --module-accent: var(--color-brand-navy);
+  --module-surface: #ffffff;
+  --module-bg: #f7f9fc;
+}
+
+[data-module="cavp"] {
+  --module-accent: var(--color-cavp-blue);
+  --module-bg: linear-gradient(180deg, #f3f7fc 0%, #eef3fb 100%);
+}
+
+[data-module="cavp"][data-capability="sig_gen"] {
+  --module-accent: var(--color-cavp-purple);
+  --module-bg: linear-gradient(180deg, #f6f3fd 0%, #f0ecfb 100%);
+}
+
+[data-module="cavp"][data-capability="sig_ver"] {
+  --module-accent: var(--color-cavp-teal);
+  --module-bg: linear-gradient(180deg, #f0faf7 0%, #e9f6f2 100%);
+}
+
+[data-module="kem"] {
+  --module-accent: var(--color-kem-green);
+  --module-bg: #eef1f5;
+}
+
+body {
+  background: var(--module-bg);
+  color: var(--color-brand-ink);
+}
+
+/* The KEM DEMO's graph-paper backdrop. */
+.kem-grid {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.06) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.accent-text {
+  color: var(--module-accent);
+}
+
+.accent-bg {
+  background-color: var(--module-accent);
+}
+
+.accent-border {
+  border-color: var(--module-accent);
+}
+
+/* Long hex blobs (pk/sk/signature) must wrap instead of stretching the layout. */
+.hex-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}

@@ -1,0 +1,370 @@
+//! Validation of student-submitted ACVP `results.json` for the CAVP practice station.
+//!
+//! The station runs a fixed question pack (the UI says 本活動已固定能力參數), so every
+//! prompt ships with an answer key generated once by `tools/gen-cavp-vectors` using the
+//! same `@noble/post-quantum` build the browser step 03 uses. Validation is therefore:
+//!
+//! 1. structural checks — parseable JSON, matching `vsId`/`algorithm`/`mode`, one entry per
+//!    `tcId`, hex-only strings of the exact FIPS 204 length; and
+//! 2. comparison against the answer key.
+//!
+//! Structural failures are reported separately from mismatches because they are what
+//! students hit first, and "your `pk` is 1312 bytes but ML-DSA-65 keys are 1952" teaches
+//! more than "incorrect".
+
+pub mod params;
+
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+pub use params::ParameterSet;
+
+#[derive(Debug, thiserror::Error)]
+pub enum ValidateError {
+    #[error("results payload is not valid JSON: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("unknown parameter set {0}")]
+    UnknownParameterSet(String),
+    #[error("results are for {got}, expected {want}")]
+    ModeMismatch { got: String, want: String },
+    #[error("results are for vsId {got}, expected {want}")]
+    VsIdMismatch { got: i64, want: i64 },
+    #[error("results are missing the testGroups array")]
+    MissingTestGroups,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaseStatus {
+    Correct,
+    Incorrect,
+    Malformed,
+    Missing,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CaseResult {
+    pub tc_id: i64,
+    pub status: CaseStatus,
+    /// Which field went wrong (`pk`, `sk`, `signature`, `testPassed`), when applicable.
+    pub field: Option<String>,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationReport {
+    pub vs_id: i64,
+    pub mode: String,
+    pub parameter_set: String,
+    pub total: usize,
+    pub correct: usize,
+    pub incorrect: usize,
+    pub malformed: usize,
+    pub missing: usize,
+    pub cases: Vec<CaseResult>,
+}
+
+impl ValidationReport {
+    pub fn all_correct(&self) -> bool {
+        self.total > 0 && self.correct == self.total
+    }
+}
+
+/// The answer key for one question pack, as stored alongside the prompt.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AnswerKey {
+    pub vs_id: i64,
+    pub mode: String,
+    pub parameter_set: String,
+    pub cases: Vec<AnswerCase>,
+}
+
+/// Expected values for one `tcId`. Only the fields relevant to the capability are set:
+/// `keyGen` -> pk/sk, `sigGen` -> signature, `sigVer` -> test_passed.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct AnswerCase {
+    pub tc_id: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pk: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sk: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub test_passed: Option<bool>,
+}
+
+/// Validate a submitted `results.json` string against an answer key.
+pub fn validate(results_json: &str, key: &AnswerKey) -> Result<ValidationReport, ValidateError> {
+    let value: serde_json::Value = serde_json::from_str(results_json)?;
+    let set = params::lookup(&key.parameter_set)
+        .ok_or_else(|| ValidateError::UnknownParameterSet(key.parameter_set.clone()))?;
+
+    if let Some(mode) = value.get("mode").and_then(|m| m.as_str()) {
+        if mode != key.mode {
+            return Err(ValidateError::ModeMismatch {
+                got: mode.to_string(),
+                want: key.mode.clone(),
+            });
+        }
+    }
+    if let Some(vs_id) = value.get("vsId").and_then(|v| v.as_i64()) {
+        if vs_id != key.vs_id {
+            return Err(ValidateError::VsIdMismatch { got: vs_id, want: key.vs_id });
+        }
+    }
+
+    let submitted = collect_cases(&value).ok_or(ValidateError::MissingTestGroups)?;
+
+    let cases: Vec<CaseResult> = key
+        .cases
+        .iter()
+        .map(|expected| match submitted.iter().find(|c| c.tc_id == expected.tc_id) {
+            None => CaseResult {
+                tc_id: expected.tc_id,
+                status: CaseStatus::Missing,
+                field: None,
+                reason: Some("no entry for this tcId".into()),
+            },
+            Some(actual) => compare_case(expected, actual, &key.mode, set),
+        })
+        .collect();
+
+    let correct = cases.iter().filter(|c| c.status == CaseStatus::Correct).count();
+    let incorrect = cases.iter().filter(|c| c.status == CaseStatus::Incorrect).count();
+    let malformed = cases.iter().filter(|c| c.status == CaseStatus::Malformed).count();
+    let missing = cases.iter().filter(|c| c.status == CaseStatus::Missing).count();
+
+    Ok(ValidationReport {
+        vs_id: key.vs_id,
+        mode: key.mode.clone(),
+        parameter_set: key.parameter_set.clone(),
+        total: cases.len(),
+        correct,
+        incorrect,
+        malformed,
+        missing,
+        cases,
+    })
+}
+
+#[derive(Debug)]
+struct SubmittedCase {
+    tc_id: i64,
+    values: serde_json::Map<String, serde_json::Value>,
+}
+
+/// ACVP nests answers as `testGroups[].tests[]`; we flatten because the practice pack only
+/// ever uses a single group (`testGroups[0].tests`, per the UI copy).
+fn collect_cases(value: &serde_json::Value) -> Option<Vec<SubmittedCase>> {
+    let groups = value.get("testGroups")?.as_array()?;
+    let mut out = Vec::new();
+    for group in groups {
+        let Some(tests) = group.get("tests").and_then(|t| t.as_array()) else {
+            continue;
+        };
+        for test in tests {
+            let Some(obj) = test.as_object() else { continue };
+            let Some(tc_id) = obj.get("tcId").and_then(|v| v.as_i64()) else { continue };
+            out.push(SubmittedCase { tc_id, values: obj.clone() });
+        }
+    }
+    Some(out)
+}
+
+fn compare_case(
+    expected: &AnswerCase,
+    actual: &SubmittedCase,
+    mode: &str,
+    set: ParameterSet,
+) -> CaseResult {
+    let ok = |()| CaseResult {
+        tc_id: expected.tc_id,
+        status: CaseStatus::Correct,
+        field: None,
+        reason: None,
+    };
+
+    match mode {
+        "keyGen" => {
+            for (field, want, len) in [
+                ("pk", expected.pk.as_deref(), set.pk_len),
+                ("sk", expected.sk.as_deref(), set.sk_len),
+            ] {
+                let Some(want) = want else { continue };
+                if let Err(result) = check_hex(expected.tc_id, actual, field, want, len) {
+                    return result;
+                }
+            }
+            ok(())
+        }
+        "sigGen" => {
+            let Some(want) = expected.signature.as_deref() else { return ok(()) };
+            match check_hex(expected.tc_id, actual, "signature", want, set.sig_len) {
+                Ok(()) => ok(()),
+                Err(result) => result,
+            }
+        }
+        "sigVer" => {
+            let Some(want) = expected.test_passed else { return ok(()) };
+            match actual.values.get("testPassed").and_then(|v| v.as_bool()) {
+                None => CaseResult {
+                    tc_id: expected.tc_id,
+                    status: CaseStatus::Malformed,
+                    field: Some("testPassed".into()),
+                    reason: Some("expected a boolean testPassed".into()),
+                },
+                Some(got) if got == want => ok(()),
+                Some(_) => CaseResult {
+                    tc_id: expected.tc_id,
+                    status: CaseStatus::Incorrect,
+                    field: Some("testPassed".into()),
+                    reason: Some(format!("expected testPassed = {want}")),
+                },
+            }
+        }
+        _ => CaseResult {
+            tc_id: expected.tc_id,
+            status: CaseStatus::Malformed,
+            field: None,
+            reason: Some(format!("unsupported mode {mode}")),
+        },
+    }
+}
+
+/// `Ok(())` when the field matches; `Err(result)` carries the failure to report.
+fn check_hex(
+    tc_id: i64,
+    actual: &SubmittedCase,
+    field: &str,
+    want: &str,
+    expected_len: usize,
+) -> Result<(), CaseResult> {
+    let malformed = |reason: String| {
+        Err(CaseResult {
+            tc_id,
+            status: CaseStatus::Malformed,
+            field: Some(field.to_string()),
+            reason: Some(reason),
+        })
+    };
+
+    let Some(got) = actual.values.get(field).and_then(|v| v.as_str()) else {
+        return malformed(format!("missing {field}"));
+    };
+    if got.trim().is_empty() {
+        return malformed(format!("{field} is empty"));
+    }
+    let bytes = match hex::decode(got.trim()) {
+        Ok(bytes) => bytes,
+        Err(err) => return malformed(format!("{field} is not hex: {err}")),
+    };
+    if bytes.len() != expected_len {
+        return malformed(format!(
+            "{field} is {} bytes, expected {expected_len}",
+            bytes.len()
+        ));
+    }
+    if !got.trim().eq_ignore_ascii_case(want) {
+        return Err(CaseResult {
+            tc_id,
+            status: CaseStatus::Incorrect,
+            field: Some(field.to_string()),
+            reason: Some(format!("{field} does not match the reference value")),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn key() -> AnswerKey {
+        AnswerKey {
+            vs_id: 91021,
+            mode: "keyGen".into(),
+            parameter_set: "ML-DSA-65".into(),
+            cases: vec![AnswerCase {
+                tc_id: 1,
+                pk: Some("aa".repeat(1952)),
+                sk: Some("bb".repeat(4032)),
+                ..Default::default()
+            }],
+        }
+    }
+
+    fn results_with(pk: &str, sk: &str) -> String {
+        serde_json::json!({
+            "vsId": 91021,
+            "algorithm": "ML-DSA",
+            "mode": "keyGen",
+            "testGroups": [{ "tgId": 1, "tests": [{ "tcId": 1, "pk": pk, "sk": sk }] }]
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn matching_answers_pass() {
+        let key = key();
+        let json = results_with(key.cases[0].pk.as_ref().unwrap(), key.cases[0].sk.as_ref().unwrap());
+        let report = validate(&json, &key).unwrap();
+        assert!(report.all_correct(), "{report:?}");
+    }
+
+    #[test]
+    fn wrong_length_is_malformed_not_incorrect() {
+        let key = key();
+        let json = results_with("aabb", key.cases[0].sk.as_ref().unwrap());
+        let report = validate(&json, &key).unwrap();
+        assert_eq!(report.cases[0].status, CaseStatus::Malformed);
+        assert_eq!(report.cases[0].field.as_deref(), Some("pk"));
+    }
+
+    #[test]
+    fn right_length_wrong_bytes_is_incorrect() {
+        let key = key();
+        let json = results_with(&"cc".repeat(1952), key.cases[0].sk.as_ref().unwrap());
+        let report = validate(&json, &key).unwrap();
+        assert_eq!(report.cases[0].status, CaseStatus::Incorrect);
+    }
+
+    #[test]
+    fn absent_case_is_missing() {
+        let key = key();
+        let json = serde_json::json!({
+            "vsId": 91021, "mode": "keyGen",
+            "testGroups": [{ "tgId": 1, "tests": [] }]
+        })
+        .to_string();
+        let report = validate(&json, &key).unwrap();
+        assert_eq!(report.cases[0].status, CaseStatus::Missing);
+        assert_eq!(report.missing, 1);
+    }
+
+    #[test]
+    fn results_for_another_capability_are_rejected_outright() {
+        let key = key();
+        let json = serde_json::json!({ "vsId": 91021, "mode": "sigGen", "testGroups": [] }).to_string();
+        assert!(matches!(validate(&json, &key), Err(ValidateError::ModeMismatch { .. })));
+    }
+
+    #[test]
+    fn sig_ver_compares_the_boolean() {
+        let key = AnswerKey {
+            vs_id: 91023,
+            mode: "sigVer".into(),
+            parameter_set: "ML-DSA-65".into(),
+            cases: vec![AnswerCase { tc_id: 1, test_passed: Some(false), ..Default::default() }],
+        };
+        let json = serde_json::json!({
+            "vsId": 91023, "mode": "sigVer",
+            "testGroups": [{ "tgId": 1, "tests": [{ "tcId": 1, "testPassed": true }] }]
+        })
+        .to_string();
+        let report = validate(&json, &key).unwrap();
+        assert_eq!(report.cases[0].status, CaseStatus::Incorrect);
+    }
+}

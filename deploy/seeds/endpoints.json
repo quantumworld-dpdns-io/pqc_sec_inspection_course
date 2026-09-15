@@ -1,0 +1,38 @@
+[
+  {
+    "slug": "a-server",
+    "label": "A server",
+    "labelZh": "A server",
+    "host": "tls-good",
+    "port": 11000,
+    "notes": "Reference OpenSSL 3.5 server with the full PQC group list enabled.",
+    "enabled": true
+  },
+  {
+    "slug": "b-server",
+    "label": "B server",
+    "labelZh": "B server",
+    "host": "tls-good",
+    "port": 11001,
+    "notes": "Second reference server, KEM preference order deliberately best-practice.",
+    "enabled": true
+  },
+  {
+    "slug": "normal-server",
+    "label": "Normal server",
+    "labelZh": "正常 server",
+    "host": "tls-good",
+    "port": 11000,
+    "notes": "Healthy target used for the happy-path handshake demo.",
+    "enabled": true
+  },
+  {
+    "slug": "vulnerable-server",
+    "label": "Vulnerable server",
+    "labelZh": "漏洞 server",
+    "host": "tls-vuln",
+    "port": 8888,
+    "notes": "Deliberately broken target: fails the handshake with InvalidTag.",
+    "enabled": true
+  }
+]

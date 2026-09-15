@@ -1,0 +1,810 @@
+[
+  {
+    "kind": "kem_group",
+    "name": "P-256",
+    "displayName": "P-256",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 0
+  },
+  {
+    "kind": "kem_group",
+    "name": "P-384",
+    "displayName": "P-384",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 1
+  },
+  {
+    "kind": "kem_group",
+    "name": "P-521",
+    "displayName": "P-521",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 2
+  },
+  {
+    "kind": "kem_group",
+    "name": "x25519",
+    "displayName": "x25519",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 3
+  },
+  {
+    "kind": "kem_group",
+    "name": "mlkem512",
+    "displayName": "mlkem512",
+    "family": "ml-kem",
+    "enabled": true,
+    "sortOrder": 4
+  },
+  {
+    "kind": "kem_group",
+    "name": "mlkem768",
+    "displayName": "mlkem768",
+    "family": "ml-kem",
+    "enabled": true,
+    "sortOrder": 5
+  },
+  {
+    "kind": "kem_group",
+    "name": "mlkem1024",
+    "displayName": "mlkem1024",
+    "family": "ml-kem",
+    "enabled": true,
+    "sortOrder": 6
+  },
+  {
+    "kind": "kem_group",
+    "name": "p256_mlkem512",
+    "displayName": "p256_mlkem512",
+    "family": "ml-kem-hybrid",
+    "enabled": true,
+    "sortOrder": 7
+  },
+  {
+    "kind": "kem_group",
+    "name": "X25519MLKEM768",
+    "displayName": "X25519MLKEM768",
+    "family": "ml-kem-hybrid",
+    "enabled": true,
+    "sortOrder": 8
+  },
+  {
+    "kind": "kem_group",
+    "name": "SecP256r1MLKEM768",
+    "displayName": "SecP256r1MLKEM768",
+    "family": "ml-kem-hybrid",
+    "enabled": true,
+    "sortOrder": 9
+  },
+  {
+    "kind": "kem_group",
+    "name": "SecP384r1MLKEM1024",
+    "displayName": "SecP384r1MLKEM1024",
+    "family": "ml-kem-hybrid",
+    "enabled": true,
+    "sortOrder": 10
+  },
+  {
+    "kind": "kem_group",
+    "name": "X25519Kyber768Draft00",
+    "displayName": "X25519Kyber768Draft00",
+    "family": "kyber-hybrid",
+    "enabled": true,
+    "sortOrder": 11
+  },
+  {
+    "kind": "kem_group",
+    "name": "kyber1024",
+    "displayName": "kyber1024",
+    "family": "kyber",
+    "enabled": false,
+    "sortOrder": 12
+  },
+  {
+    "kind": "kem_group",
+    "name": "bikel3",
+    "displayName": "bikel3",
+    "family": "bike",
+    "enabled": true,
+    "sortOrder": 13
+  },
+  {
+    "kind": "kem_group",
+    "name": "p384_bikel3",
+    "displayName": "p384_bikel3",
+    "family": "bike-hybrid",
+    "enabled": true,
+    "sortOrder": 14
+  },
+  {
+    "kind": "kem_group",
+    "name": "bikel5",
+    "displayName": "bikel5",
+    "family": "bike",
+    "enabled": true,
+    "sortOrder": 15
+  },
+  {
+    "kind": "kem_group",
+    "name": "p521_bikel5",
+    "displayName": "p521_bikel5",
+    "family": "bike-hybrid",
+    "enabled": true,
+    "sortOrder": 16
+  },
+  {
+    "kind": "kem_group",
+    "name": "bike1",
+    "displayName": "bike1",
+    "family": "bike",
+    "enabled": false,
+    "sortOrder": 17
+  },
+  {
+    "kind": "kem_group",
+    "name": "bike3",
+    "displayName": "bike3",
+    "family": "bike",
+    "enabled": false,
+    "sortOrder": 18
+  },
+  {
+    "kind": "kem_group",
+    "name": "hqc128",
+    "displayName": "hqc128",
+    "family": "hqc",
+    "enabled": false,
+    "sortOrder": 19
+  },
+  {
+    "kind": "kem_group",
+    "name": "hqc192",
+    "displayName": "hqc192",
+    "family": "hqc",
+    "enabled": false,
+    "sortOrder": 20
+  },
+  {
+    "kind": "kem_group",
+    "name": "hqc256",
+    "displayName": "hqc256",
+    "family": "hqc",
+    "enabled": false,
+    "sortOrder": 21
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo640aes",
+    "displayName": "efrodo640aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 22
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo640shake",
+    "displayName": "efrodo640shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 23
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo976aes",
+    "displayName": "efrodo976aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 24
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo976shake",
+    "displayName": "efrodo976shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 25
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo1344aes",
+    "displayName": "efrodo1344aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 26
+  },
+  {
+    "kind": "kem_group",
+    "name": "efrodo1344shake",
+    "displayName": "efrodo1344shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 27
+  },
+  {
+    "kind": "kem_group",
+    "name": "p256_efrodo640aes",
+    "displayName": "p256_efrodo640aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 28
+  },
+  {
+    "kind": "kem_group",
+    "name": "p256_efrodo640shake",
+    "displayName": "p256_efrodo640shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 29
+  },
+  {
+    "kind": "kem_group",
+    "name": "x25519_efrodo640aes",
+    "displayName": "x25519_efrodo640aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 30
+  },
+  {
+    "kind": "kem_group",
+    "name": "x25519_efrodo640shake",
+    "displayName": "x25519_efrodo640shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 31
+  },
+  {
+    "kind": "kem_group",
+    "name": "p384_efrodo976aes",
+    "displayName": "p384_efrodo976aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 32
+  },
+  {
+    "kind": "kem_group",
+    "name": "p384_efrodo976shake",
+    "displayName": "p384_efrodo976shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 33
+  },
+  {
+    "kind": "kem_group",
+    "name": "p521_efrodo1344aes",
+    "displayName": "p521_efrodo1344aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 34
+  },
+  {
+    "kind": "kem_group",
+    "name": "p521_efrodo1344shake",
+    "displayName": "p521_efrodo1344shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 35
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo640aes",
+    "displayName": "frodo640aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 36
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo640shake",
+    "displayName": "frodo640shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 37
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo976aes",
+    "displayName": "frodo976aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 38
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo976shake",
+    "displayName": "frodo976shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 39
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo1344aes",
+    "displayName": "frodo1344aes",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 40
+  },
+  {
+    "kind": "kem_group",
+    "name": "frodo1344shake",
+    "displayName": "frodo1344shake",
+    "family": "frodo",
+    "enabled": true,
+    "sortOrder": 41
+  },
+  {
+    "kind": "kem_group",
+    "name": "p256_frodo640aes",
+    "displayName": "p256_frodo640aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 42
+  },
+  {
+    "kind": "kem_group",
+    "name": "p256_frodo640shake",
+    "displayName": "p256_frodo640shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 43
+  },
+  {
+    "kind": "kem_group",
+    "name": "x25519_frodo640aes",
+    "displayName": "x25519_frodo640aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 44
+  },
+  {
+    "kind": "kem_group",
+    "name": "x25519_frodo640shake",
+    "displayName": "x25519_frodo640shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 45
+  },
+  {
+    "kind": "kem_group",
+    "name": "p384_frodo976aes",
+    "displayName": "p384_frodo976aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 46
+  },
+  {
+    "kind": "kem_group",
+    "name": "p384_frodo976shake",
+    "displayName": "p384_frodo976shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 47
+  },
+  {
+    "kind": "kem_group",
+    "name": "p521_frodo1344aes",
+    "displayName": "p521_frodo1344aes",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 48
+  },
+  {
+    "kind": "kem_group",
+    "name": "p521_frodo1344shake",
+    "displayName": "p521_frodo1344shake",
+    "family": "frodo-hybrid",
+    "enabled": true,
+    "sortOrder": 49
+  },
+  {
+    "kind": "kem_group",
+    "name": "FRODOKEM-640",
+    "displayName": "FRODOKEM-640",
+    "family": "frodo",
+    "enabled": false,
+    "sortOrder": 50
+  },
+  {
+    "kind": "kem_group",
+    "name": "FRODOKEM-976",
+    "displayName": "FRODOKEM-976",
+    "family": "frodo",
+    "enabled": false,
+    "sortOrder": 51
+  },
+  {
+    "kind": "kem_group",
+    "name": "FRODOKEM-1344",
+    "displayName": "FRODOKEM-1344",
+    "family": "frodo",
+    "enabled": false,
+    "sortOrder": 52
+  },
+  {
+    "kind": "kem_group",
+    "name": "NTRU-HRSS-701",
+    "displayName": "NTRU-HRSS-701",
+    "family": "ntru",
+    "enabled": false,
+    "sortOrder": 53
+  },
+  {
+    "kind": "kem_group",
+    "name": "NTRU-HRSS-1373",
+    "displayName": "NTRU-HRSS-1373",
+    "family": "ntru",
+    "enabled": false,
+    "sortOrder": 54
+  },
+  {
+    "kind": "kem_group",
+    "name": "MCELIECE-348864",
+    "displayName": "MCELIECE-348864",
+    "family": "mceliece",
+    "enabled": false,
+    "sortOrder": 55
+  },
+  {
+    "kind": "kem_group",
+    "name": "MCELIECE-460896",
+    "displayName": "MCELIECE-460896",
+    "family": "mceliece",
+    "enabled": false,
+    "sortOrder": 56
+  },
+  {
+    "kind": "sig_alg",
+    "name": "ecdsa_sha256",
+    "displayName": "ecdsa_sha256",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 0
+  },
+  {
+    "kind": "sig_alg",
+    "name": "ecdsa_secp256r1_sha256",
+    "displayName": "ecdsa_secp256r1_sha256",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 1
+  },
+  {
+    "kind": "sig_alg",
+    "name": "ed25519",
+    "displayName": "ed25519",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 2
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa_pkcs1_sha1",
+    "displayName": "rsa_pkcs1_sha1",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 3
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa_pkcs1_md5_sha1",
+    "displayName": "rsa_pkcs1_md5_sha1",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 4
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa_pkcs1_sha384",
+    "displayName": "rsa_pkcs1_sha384",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 5
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa_pss_rsae_sha256",
+    "displayName": "rsa_pss_rsae_sha256",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 6
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa_pss_rsae_sha512",
+    "displayName": "rsa_pss_rsae_sha512",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 7
+  },
+  {
+    "kind": "sig_alg",
+    "name": "dsa_sha512",
+    "displayName": "dsa_sha512",
+    "family": "classical",
+    "enabled": true,
+    "sortOrder": 8
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mldsa44",
+    "displayName": "mldsa44",
+    "family": "ml-dsa",
+    "enabled": true,
+    "sortOrder": 9
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mldsa65",
+    "displayName": "mldsa65",
+    "family": "ml-dsa",
+    "enabled": true,
+    "sortOrder": 10
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mldsa87",
+    "displayName": "mldsa87",
+    "family": "ml-dsa",
+    "enabled": true,
+    "sortOrder": 11
+  },
+  {
+    "kind": "sig_alg",
+    "name": "falcon512",
+    "displayName": "falcon512",
+    "family": "falcon",
+    "enabled": true,
+    "sortOrder": 12
+  },
+  {
+    "kind": "sig_alg",
+    "name": "falcon1024",
+    "displayName": "falcon1024",
+    "family": "falcon",
+    "enabled": true,
+    "sortOrder": 13
+  },
+  {
+    "kind": "sig_alg",
+    "name": "falconpadded512",
+    "displayName": "falconpadded512",
+    "family": "falcon",
+    "enabled": true,
+    "sortOrder": 14
+  },
+  {
+    "kind": "sig_alg",
+    "name": "falconpadded1024",
+    "displayName": "falconpadded1024",
+    "family": "falcon",
+    "enabled": true,
+    "sortOrder": 15
+  },
+  {
+    "kind": "sig_alg",
+    "name": "rsa3072_falcon512",
+    "displayName": "rsa3072_falcon512",
+    "family": "falcon-hybrid",
+    "enabled": true,
+    "sortOrder": 16
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mayo1",
+    "displayName": "mayo1",
+    "family": "mayo",
+    "enabled": true,
+    "sortOrder": 17
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mayo2",
+    "displayName": "mayo2",
+    "family": "mayo",
+    "enabled": true,
+    "sortOrder": 18
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mayo3",
+    "displayName": "mayo3",
+    "family": "mayo",
+    "enabled": true,
+    "sortOrder": 19
+  },
+  {
+    "kind": "sig_alg",
+    "name": "mayo5",
+    "displayName": "mayo5",
+    "family": "mayo",
+    "enabled": true,
+    "sortOrder": 20
+  },
+  {
+    "kind": "sig_alg",
+    "name": "p256_mayo2",
+    "displayName": "p256_mayo2",
+    "family": "mayo-hybrid",
+    "enabled": true,
+    "sortOrder": 21
+  },
+  {
+    "kind": "sig_alg",
+    "name": "p384_mayo3",
+    "displayName": "p384_mayo3",
+    "family": "mayo-hybrid",
+    "enabled": true,
+    "sortOrder": 22
+  },
+  {
+    "kind": "sig_alg",
+    "name": "p521_mayo5",
+    "displayName": "p521_mayo5",
+    "family": "mayo-hybrid",
+    "enabled": true,
+    "sortOrder": 23
+  },
+  {
+    "kind": "sig_alg",
+    "name": "snova2454",
+    "displayName": "snova2454",
+    "family": "snova",
+    "enabled": true,
+    "sortOrder": 24
+  },
+  {
+    "kind": "sig_alg",
+    "name": "snova2454esk",
+    "displayName": "snova2454esk",
+    "family": "snova",
+    "enabled": true,
+    "sortOrder": 25
+  },
+  {
+    "kind": "sig_alg",
+    "name": "snova37172",
+    "displayName": "snova37172",
+    "family": "snova",
+    "enabled": true,
+    "sortOrder": 26
+  },
+  {
+    "kind": "sig_alg",
+    "name": "snova2455",
+    "displayName": "snova2455",
+    "family": "snova",
+    "enabled": true,
+    "sortOrder": 27
+  },
+  {
+    "kind": "sig_alg",
+    "name": "snova2965",
+    "displayName": "snova2965",
+    "family": "snova",
+    "enabled": true,
+    "sortOrder": 28
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2128s",
+    "displayName": "slhdsasha2128s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 29
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2128f",
+    "displayName": "slhdsasha2128f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 30
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2192s",
+    "displayName": "slhdsasha2192s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 31
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2192f",
+    "displayName": "slhdsasha2192f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 32
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2256s",
+    "displayName": "slhdsasha2256s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 33
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsasha2256f",
+    "displayName": "slhdsasha2256f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 34
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake128s",
+    "displayName": "slhdsashake128s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 35
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake128f",
+    "displayName": "slhdsashake128f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 36
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake192s",
+    "displayName": "slhdsashake192s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 37
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake192f",
+    "displayName": "slhdsashake192f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 38
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake256s",
+    "displayName": "slhdsashake256s",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 39
+  },
+  {
+    "kind": "sig_alg",
+    "name": "slhdsashake256f",
+    "displayName": "slhdsashake256f",
+    "family": "slh-dsa",
+    "enabled": true,
+    "sortOrder": 40
+  },
+  {
+    "kind": "sig_alg",
+    "name": "CROSSrsdp128balanced",
+    "displayName": "CROSSrsdp128balanced",
+    "family": "cross",
+    "enabled": true,
+    "sortOrder": 41
+  },
+  {
+    "kind": "sig_alg",
+    "name": "OV_Ip_pkc",
+    "displayName": "OV_Ip_pkc",
+    "family": "uov",
+    "enabled": true,
+    "sortOrder": 42
+  },
+  {
+    "kind": "sig_alg",
+    "name": "OV_Ip_pkc_skc",
+    "displayName": "OV_Ip_pkc_skc",
+    "family": "uov",
+    "enabled": true,
+    "sortOrder": 43
+  }
+]

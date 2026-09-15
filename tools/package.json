@@ -1,0 +1,12 @@
+{
+  "name": "pqcas-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen:algorithms": "node gen-algorithms.mjs",
+    "gen:cavp": "node gen-cavp-vectors.mjs"
+  },
+  "dependencies": {
+    "@noble/post-quantum": "0.6.1"
+  }
+}

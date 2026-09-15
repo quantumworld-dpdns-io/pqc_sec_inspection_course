@@ -6,7 +6,7 @@ members = [
     "crates/cavp-validate",
     "services/api",
     "services/worker",
-    "adapters/openssl",
+    "adapters/cli",
 ]
 
 [workspace.package]
@@ -21,6 +21,7 @@ adapter-proto = { path = "crates/adapter-proto" }
 cavp-validate = { path = "crates/cavp-validate" }
 
 anyhow = "1"
+async-stream = "0.3"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["macros"] }
 base64 = "0.22"
