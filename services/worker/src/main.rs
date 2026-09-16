@@ -20,7 +20,9 @@ use crate::config::Config;
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .json()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()),
+        )
         .init();
 
     let config = Config::parse();
@@ -69,7 +71,8 @@ async fn tick(
     config: &Config,
     permits: Arc<Semaphore>,
 ) -> anyhow::Result<()> {
-    let mut deliveries = stream::read(conn, &[STREAM_PROBE, STREAM_KEM], &config.name, 2_000, 16).await?;
+    let mut deliveries =
+        stream::read(conn, &[STREAM_PROBE, STREAM_KEM], &config.name, 2_000, 16).await?;
 
     // Nothing new: use the idle moment to pick up anything a dead worker left pending.
     if deliveries.is_empty() {

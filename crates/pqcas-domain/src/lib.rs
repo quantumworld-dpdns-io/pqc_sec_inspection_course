@@ -19,9 +19,16 @@ pub fn classify(
     offered: &[String],
     capabilities: &adapter_proto::Capabilities,
 ) -> ResultStatus {
-    let unsupported = offered
-        .iter()
-        .all(|alg| !capabilities.kem_groups.contains(alg) && !capabilities.sig_algs.contains(alg));
+    // Spellings differ between catalogs and TLS stacks (`mlkem768` vs `MLKEM768`), so the
+    // comparison is case-insensitive; the adapters translate the rest.
+    let known = |alg: &String| {
+        capabilities
+            .kem_groups
+            .iter()
+            .chain(capabilities.sig_algs.iter())
+            .any(|known| known.eq_ignore_ascii_case(alg))
+    };
+    let unsupported = !offered.iter().any(known);
     if unsupported {
         return ResultStatus::Unsupported;
     }

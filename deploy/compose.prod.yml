@@ -1,0 +1,23 @@
+# Production overlay for the lab host: run published images, never build on the box.
+# `REGISTRY` and `TAG` come from the deploy workflow.
+services:
+  api-migrate:
+    build: !reset null
+    image: ${REGISTRY}/pqc-api:${TAG}
+  api-seed:
+    image: ${REGISTRY}/pqc-api:${TAG}
+  api:
+    build: !reset null
+    image: ${REGISTRY}/pqc-api:${TAG}
+  worker:
+    build: !reset null
+    image: ${REGISTRY}/pqc-worker:${TAG}
+  web:
+    build: !reset null
+    image: ${REGISTRY}/pqc-web:${TAG}
+  adapter-openssl:
+    build: !reset null
+    image: ${REGISTRY}/pqc-adapter-openssl:${TAG}
+  adapter-go:
+    build: !reset null
+    image: ${REGISTRY}/pqc-adapter-go:${TAG}

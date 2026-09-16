@@ -54,16 +54,30 @@ pub enum TestEvent {
         sig_alg: String,
     },
     #[serde(rename_all = "camelCase")]
-    TestFinished { test_id: Uuid, passed: u32, failed: u32 },
+    TestFinished {
+        test_id: Uuid,
+        passed: u32,
+        failed: u32,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum KemEvent {
     #[serde(rename_all = "camelCase")]
-    Log { seq: i32, at: String, level: String, message: String },
+    Log {
+        seq: i32,
+        at: String,
+        level: String,
+        message: String,
+    },
     #[serde(rename_all = "camelCase")]
-    Cell { kem: String, adapter: String, verdict: ResultStatus, detail: Option<String> },
+    Cell {
+        kem: String,
+        adapter: String,
+        verdict: ResultStatus,
+        detail: Option<String>,
+    },
     #[serde(rename_all = "camelCase")]
     Finished { run_id: Uuid },
 }

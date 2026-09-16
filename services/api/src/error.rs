@@ -34,7 +34,10 @@ impl IntoResponse for ApiError {
             }
             other => {
                 tracing::error!(error = %other, "unhandled api error");
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error".to_string(),
+                )
             }
         };
         (status, Json(json!({ "error": message }))).into_response()

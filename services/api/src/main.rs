@@ -34,7 +34,9 @@ enum Command {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .json()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()))
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()),
+        )
         .init();
 
     let cli = Cli::parse();
@@ -73,7 +75,9 @@ async fn main() -> anyhow::Result<()> {
 /// Let compose/systemd stop us cleanly: finish in-flight requests, then exit.
 async fn shutdown_signal() {
     let ctrl_c = async {
-        tokio::signal::ctrl_c().await.expect("install ctrl-c handler");
+        tokio::signal::ctrl_c()
+            .await
+            .expect("install ctrl-c handler");
     };
 
     #[cfg(unix)]

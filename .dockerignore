@@ -1,0 +1,14 @@
+.git
+.github
+.ignore
+.claude
+node_modules
+**/node_modules
+target
+**/target
+apps/web/.next
+apps/web/playwright-report
+apps/web/test-results
+tools/node_modules
+deploy/.env
+*.log

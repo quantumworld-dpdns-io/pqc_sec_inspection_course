@@ -88,7 +88,11 @@ pub async fn autoclaim(
                         None => continue,
                     };
                     if let Some(payload) = field_value(&fields, "job") {
-                        out.push(Delivery { stream: stream.to_string(), id, payload });
+                        out.push(Delivery {
+                            stream: stream.to_string(),
+                            id,
+                            payload,
+                        });
                     }
                 }
             }

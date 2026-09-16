@@ -52,7 +52,12 @@ pub async fn run(config: &Config, backend: Backend, request: &ProbeRequest) -> P
 
     let http_request = http_request_line(request);
 
-    let mut child = match Command::new(&config.client_bin)
+    let mut command = Command::new(&config.client_bin);
+    if let Some(dir) = &config.workdir {
+        command.current_dir(dir);
+    }
+
+    let mut child = match command
         .args(&args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -103,7 +108,11 @@ pub async fn run(config: &Config, backend: Backend, request: &ProbeRequest) -> P
     };
 
     if request.capture.raw_records {
-        let transcript = format!("$ {} {}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}", config.client_bin, args.join(" "));
+        let transcript = format!(
+            "$ {} {}\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}",
+            config.client_bin,
+            args.join(" ")
+        );
         response.evidence.uds_dump_b64 =
             Some(base64::engine::general_purpose::STANDARD.encode(transcript));
     }
@@ -112,8 +121,16 @@ pub async fn run(config: &Config, backend: Backend, request: &ProbeRequest) -> P
 }
 
 fn http_request_line(request: &ProbeRequest) -> String {
-    let path = request.target.http_path.clone().unwrap_or_else(|| "/".into());
-    let host = request.target.sni.clone().unwrap_or_else(|| request.target.host.clone());
+    let path = request
+        .target
+        .http_path
+        .clone()
+        .unwrap_or_else(|| "/".into());
+    let host = request
+        .target
+        .sni
+        .clone()
+        .unwrap_or_else(|| request.target.host.clone());
     format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: pqcas-probe\r\nConnection: close\r\nAccept: */*\r\n\r\n")
 }
 
@@ -122,7 +139,71 @@ fn connect_arg(request: &ProbeRequest) -> String {
 }
 
 fn sni(request: &ProbeRequest) -> String {
-    request.target.sni.clone().unwrap_or_else(|| request.target.host.clone())
+    request
+        .target
+        .sni
+        .clone()
+        .unwrap_or_else(|| request.target.host.clone())
+}
+
+/// Catalog names are not the same strings every TLS stack accepts: the lab catalog spells
+/// ML-KEM the way the PQ-CAS screens do (`mlkem768`), OpenSSL wants `MLKEM768`, and wolfSSL
+/// wants `ML_KEM_768`. Translation happens here, at the point of invocation, so the rest of
+/// the system keeps one vocabulary.
+/// Curves that carry no post-quantum component, in every spelling the catalog and the
+/// stacks use between them.
+fn is_classical_group(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "x25519"
+            | "x448"
+            | "p-256"
+            | "p-384"
+            | "p-521"
+            | "secp256r1"
+            | "secp384r1"
+            | "secp521r1"
+            | "prime256v1"
+    )
+}
+
+fn stack_group(backend: Backend, name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    match backend {
+        Backend::OpenSsl | Backend::BoringSsl => match lower.as_str() {
+            "mlkem512" => "MLKEM512",
+            "mlkem768" => "MLKEM768",
+            "mlkem1024" => "MLKEM1024",
+            "x25519mlkem768" => "X25519MLKEM768",
+            "secp256r1mlkem768" => "SecP256r1MLKEM768",
+            "secp384r1mlkem1024" => "SecP384r1MLKEM1024",
+            "p-256" | "secp256r1" => "P-256",
+            "p-384" | "secp384r1" => "P-384",
+            "p-521" | "secp521r1" => "P-521",
+            "x25519" => "x25519",
+            "x448" => "x448",
+            _ => name,
+        },
+        Backend::WolfSsl => match lower.as_str() {
+            // wolfSSL's own spelling, and only for the groups this build actually has: its
+            // hybrids pair differently from the TLS registry (P256_ML_KEM_512, not
+            // SecP256r1MLKEM768), so they are left unmapped and reported as unsupported.
+            "mlkem512" => "ML_KEM_512",
+            "mlkem768" => "ML_KEM_768",
+            "mlkem1024" => "ML_KEM_1024",
+            _ => name,
+        },
+        Backend::Mock => name,
+    }
+    .to_string()
+}
+
+fn stack_groups(backend: Backend, request: &ProbeRequest) -> Vec<String> {
+    request
+        .kem_groups
+        .iter()
+        .map(|group| stack_group(backend, group))
+        .collect()
 }
 
 fn openssl_args(request: &ProbeRequest) -> Vec<String> {
@@ -133,7 +214,8 @@ fn openssl_args(request: &ProbeRequest) -> Vec<String> {
         "-servername".into(),
         sni(request),
         "-showcerts".into(),
-        "-verify_return_error".into(),
+        // No `-verify_return_error`: lab targets use self-signed certificates on purpose,
+        // and refusing to complete the handshake over that would hide the thing under test.
         "-ign_eof".into(),
     ];
     if request.tls_versions.iter().any(|v| v == "TLSv1.3") && request.tls_versions.len() == 1 {
@@ -141,7 +223,7 @@ fn openssl_args(request: &ProbeRequest) -> Vec<String> {
     }
     if !request.kem_groups.is_empty() {
         args.push("-groups".into());
-        args.push(request.kem_groups.join(":"));
+        args.push(stack_groups(Backend::OpenSsl, request).join(":"));
     }
     if !request.sig_algs.is_empty() {
         args.push("-sigalgs".into());
@@ -160,7 +242,7 @@ fn boringssl_args(request: &ProbeRequest) -> Vec<String> {
     ];
     if !request.kem_groups.is_empty() {
         args.push("-curves".into());
-        args.push(request.kem_groups.join(":"));
+        args.push(stack_groups(Backend::BoringSsl, request).join(":"));
     }
     args
 }
@@ -177,10 +259,21 @@ fn wolfssl_args(request: &ProbeRequest) -> Vec<String> {
         sni(request),
         "-d".into(),
     ];
-    if let Some(group) = request.kem_groups.first() {
+    // `--pqc` only accepts post-quantum names; handing it a classical curve aborts the
+    // client with "invalid post-quantum KEM specified". Classical probes therefore run with
+    // wolfSSL's default curve selection, and the negotiated group is read back from the
+    // output rather than pinned.
+    if let Some(group) = request
+        .kem_groups
+        .first()
+        .filter(|g| !is_classical_group(g))
+    {
         args.push("--pqc".into());
-        args.push(group.clone());
+        args.push(stack_group(Backend::WolfSsl, group));
     }
+    // Without -g the example client completes the handshake and then blocks waiting for
+    // console input, which shows up as a probe timeout rather than a result.
+    args.push("-g".into());
     args
 }
 
@@ -262,9 +355,17 @@ fn parse_alert(text: &str) -> Option<Alert> {
         });
     }
     // BoringSSL and wolfSSL print the name directly.
-    for name in ["handshake_failure", "bad_record_mac", "illegal_parameter", "protocol_version"] {
+    for name in [
+        "handshake_failure",
+        "bad_record_mac",
+        "illegal_parameter",
+        "protocol_version",
+    ] {
         if text.contains(name) {
-            return Some(Alert { level: "fatal".into(), description: name.into() });
+            return Some(Alert {
+                level: "fatal".into(),
+                description: name.into(),
+            });
         }
     }
     None
@@ -289,7 +390,11 @@ fn parse_http(text: &str) -> Option<HttpOutcome> {
     let body: String = lines.collect::<Vec<_>>().join("\n");
     let body_excerpt = (!body.trim().is_empty()).then(|| body.chars().take(512).collect());
 
-    Some(HttpOutcome { status, headers, body_excerpt })
+    Some(HttpOutcome {
+        status,
+        headers,
+        body_excerpt,
+    })
 }
 
 fn parse_openssl_certs(stdout: &str) -> Vec<Certificate> {
@@ -332,6 +437,26 @@ fn byte_counts(text: &str) -> (u64, u64) {
     }
 }
 
+/// Peel the group name out of OpenSSL's temp-key line.
+///
+/// It comes in two shapes: `X25519, 253 bits` for curves that are their own group, and
+/// `ECDH, P-256, 256 bits` for the NIST curves, where the first field is the mechanism.
+/// Returning "ECDH" there would put a meaningless entry in the recovered preference order
+/// and trip the best-practice check, since no classical name matches it.
+fn strip_key_size(value: String) -> String {
+    let parts: Vec<&str> = value.split(',').map(str::trim).collect();
+    match parts.as_slice() {
+        [mechanism, group, ..]
+            if mechanism.eq_ignore_ascii_case("ECDH")
+                || mechanism.eq_ignore_ascii_case("ECDHE") =>
+        {
+            group.to_string()
+        }
+        [first, ..] => first.to_string(),
+        [] => value,
+    }
+}
+
 fn parse_openssl(
     adapter: &str,
     request: &ProbeRequest,
@@ -345,27 +470,46 @@ fn parse_openssl(
             value_after(stdout, "New, ")
                 .and_then(|rest| rest.split(',').next().map(str::trim).map(str::to_string))
         });
+    // OpenSSL prints a protocol and a cipher line even for a handshake that never
+    // completed - the placeholders below are how a failure actually looks, so they have to
+    // be filtered out before deciding success.
     let cipher_suite = value_after(stdout, "Cipher    : ")
         .or_else(|| value_after(stdout, "Cipher is "))
-        .filter(|c| c != "0000");
+        .filter(|c| c != "0000" && c != "(NONE)" && c != "NONE");
+    // OpenSSL only prints "Negotiated TLS1.3 group" for the PQC/hybrid groups; for the
+    // classical ones the group hides in "Peer Temp Key: X25519, 253 bits".
     let group = value_after(stdout, "Negotiated TLS1.3 group: ")
-        .or_else(|| value_after(stdout, "Server Temp Key: "));
+        .or_else(|| value_after(stdout, "Peer Temp Key: ").map(strip_key_size))
+        .or_else(|| value_after(stdout, "Server Temp Key: ").map(strip_key_size))
+        .filter(|g| g != "<NULL>" && g != "(NONE)");
     let cert_verify_sig_alg = value_after(stdout, "Peer signature type: ");
 
-    let handshake_success = tls_version.is_some() && cipher_suite.is_some();
+    // A negotiated cipher is the signal that the handshake completed; an alert *after* that
+    // (a server that dislikes the HTTP request, say) belongs to a later stage and must not
+    // turn a working key exchange into a red cell.
     let alert = parse_alert(&combined);
     let http = parse_http(stdout);
+    let handshake_success = cipher_suite.is_some() || http.is_some();
     let (sent, received) = byte_counts(stdout);
 
     build_response(
         adapter,
         request,
         handshake_success,
-        Negotiated { tls_version, cipher_suite, group, cert_verify_sig_alg },
+        Negotiated {
+            tls_version,
+            cipher_suite,
+            group,
+            cert_verify_sig_alg,
+        },
         alert,
         parse_openssl_certs(stdout),
         http,
-        Evidence { bytes_sent: sent, bytes_received: received, ..Default::default() },
+        Evidence {
+            bytes_sent: sent,
+            bytes_received: received,
+            ..Default::default()
+        },
         first_error_line(&combined),
     )
 }
@@ -376,21 +520,50 @@ fn parse_boringssl(
     stdout: &str,
     stderr: &str,
 ) -> ProbeResponse {
+    // `bssl client` splits its output: the connection summary goes to stderr and only the
+    // application data reaches stdout, so the summary is read from stderr and the HTTP
+    // response from stdout.
     let combined = format!("{stdout}\n{stderr}");
-    let tls_version = value_after(stdout, "Version: ");
-    let cipher_suite = value_after(stdout, "Cipher: ");
-    let group = value_after(stdout, "ECDHE curve: ").or_else(|| value_after(stdout, "Group: "));
-    let cert_verify_sig_alg = value_after(stdout, "Signature algorithm: ");
-    let handshake_success = stdout.contains("Connected") && cipher_suite.is_some();
+    let tls_version = value_after(stderr, "Version: ");
+    let cipher_suite = value_after(stderr, "Cipher: ");
+    let group = value_after(stderr, "ECDHE group: ")
+        .or_else(|| value_after(stderr, "ECDHE curve: "))
+        .or_else(|| value_after(stderr, "Group: "));
+    let cert_verify_sig_alg = value_after(stderr, "Signature algorithm: ");
+    let alert = parse_alert(&combined);
+    let http = parse_http(stdout);
+
+    let cert_chain = match (
+        value_after(stderr, "Cert subject: "),
+        value_after(stderr, "Cert issuer: "),
+    ) {
+        (Some(subject), issuer) => vec![Certificate {
+            subject,
+            issuer: issuer.unwrap_or_default(),
+            not_before: None,
+            not_after: None,
+            signature_algorithm: None,
+            public_key_algorithm: None,
+            sha256_fingerprint: None,
+        }],
+        _ => Vec::new(),
+    };
+
+    let handshake_success = cipher_suite.is_some() || http.is_some();
 
     build_response(
         adapter,
         request,
         handshake_success,
-        Negotiated { tls_version, cipher_suite, group, cert_verify_sig_alg },
-        parse_alert(&combined),
-        Vec::new(),
-        parse_http(stdout),
+        Negotiated {
+            tls_version,
+            cipher_suite,
+            group,
+            cert_verify_sig_alg,
+        },
+        alert,
+        cert_chain,
+        http,
         Evidence::default(),
         first_error_line(&combined),
     )
@@ -403,19 +576,30 @@ fn parse_wolfssl(
     stderr: &str,
 ) -> ProbeResponse {
     let combined = format!("{stdout}\n{stderr}");
-    let tls_version = value_after(stdout, "SSL version is ");
-    let cipher_suite = value_after(stdout, "SSL cipher suite is ");
-    let group = value_after(stdout, "SSL curve name is ");
-    let handshake_success = cipher_suite.is_some();
+    let tls_version = value_after(&combined, "SSL version is ");
+    let cipher_suite = value_after(&combined, "SSL cipher suite is ");
+    // "SSL curve name is" reports the ECC curve even when a post-quantum KEM was used, so
+    // the PQ line wins when present; otherwise the cell would claim SECP384R1 for an
+    // ML-KEM handshake.
+    let group = value_after(&combined, "Using Post-Quantum KEM: ")
+        .or_else(|| value_after(&combined, "SSL curve name is "));
+    let alert = parse_alert(&combined);
+    let http = parse_http(stdout);
+    let handshake_success = cipher_suite.is_some() || http.is_some();
 
     build_response(
         adapter,
         request,
         handshake_success,
-        Negotiated { tls_version, cipher_suite, group, cert_verify_sig_alg: None },
-        parse_alert(&combined),
+        Negotiated {
+            tls_version,
+            cipher_suite,
+            group,
+            cert_verify_sig_alg: None,
+        },
+        alert,
         Vec::new(),
-        parse_http(stdout),
+        http,
         Evidence::default(),
         first_error_line(&combined),
     )
@@ -455,11 +639,17 @@ fn build_response(
             fields: vec![
                 MessageField::single(
                     "Version",
-                    negotiated.tls_version.clone().unwrap_or_else(|| "unknown".into()),
+                    negotiated
+                        .tls_version
+                        .clone()
+                        .unwrap_or_else(|| "unknown".into()),
                 ),
                 MessageField::single(
                     "Cipher Suite",
-                    negotiated.cipher_suite.clone().unwrap_or_else(|| "unknown".into()),
+                    negotiated
+                        .cipher_suite
+                        .clone()
+                        .unwrap_or_else(|| "unknown".into()),
                 ),
                 MessageField::single(
                     "Key Exchange Group",
@@ -498,7 +688,11 @@ fn build_response(
         cert_chain,
         http,
         failed_stage,
-        error_summary: if handshake_success { None } else { error_summary },
+        error_summary: if handshake_success {
+            None
+        } else {
+            error_summary
+        },
         diagnostics: serde_json::json!({
             "offeredGroups": request.kem_groups,
             "offeredSigAlgs": request.sig_algs,
@@ -523,7 +717,9 @@ fn mock(config: &Config, request: &ProbeRequest) -> ProbeResponse {
     let group_ok = known.is_empty() || known.iter().any(|g| g.eq_ignore_ascii_case(&offered_group));
     let sig_ok = offered_sig.is_empty()
         || known_sigs.is_empty()
-        || known_sigs.iter().any(|s| s.eq_ignore_ascii_case(&offered_sig));
+        || known_sigs
+            .iter()
+            .any(|s| s.eq_ignore_ascii_case(&offered_sig));
 
     if vulnerable {
         let mut response = build_response(
@@ -531,7 +727,10 @@ fn mock(config: &Config, request: &ProbeRequest) -> ProbeResponse {
             request,
             false,
             Negotiated::default(),
-            Some(Alert { level: "fatal".into(), description: "bad_record_mac".into() }),
+            Some(Alert {
+                level: "fatal".into(),
+                description: "bad_record_mac".into(),
+            }),
             Vec::new(),
             None,
             Evidence::default(),
@@ -547,13 +746,20 @@ fn mock(config: &Config, request: &ProbeRequest) -> ProbeResponse {
             request,
             false,
             Negotiated::default(),
-            Some(Alert { level: "fatal".into(), description: "handshake_failure".into() }),
+            Some(Alert {
+                level: "fatal".into(),
+                description: "handshake_failure".into(),
+            }),
             Vec::new(),
             None,
             Evidence::default(),
             Some(format!(
                 "no shared {}",
-                if group_ok { "signature algorithm" } else { "group" }
+                if group_ok {
+                    "signature algorithm"
+                } else {
+                    "group"
+                }
             )),
         );
     }
@@ -591,7 +797,11 @@ fn mock(config: &Config, request: &ProbeRequest) -> ProbeResponse {
             ],
             body_excerpt: Some("{\"mock\":true}".into()),
         }),
-        Evidence { bytes_sent: 9240, bytes_received: 1658, ..Default::default() },
+        Evidence {
+            bytes_sent: 9240,
+            bytes_received: 1658,
+            ..Default::default()
+        },
         None,
     )
 }
@@ -621,6 +831,7 @@ mod tests {
             kem_groups: groups.into(),
             sig_algs: "mldsa65".into(),
             version: "test".into(),
+            workdir: None,
         }
     }
 
@@ -631,6 +842,22 @@ mod tests {
         assert!(joined.contains("-groups X25519MLKEM768"), "{joined}");
         assert!(joined.contains("-sigalgs mldsa65"), "{joined}");
         assert!(joined.contains("-connect tls-good:11000"), "{joined}");
+    }
+
+    #[test]
+    fn catalog_names_are_translated_per_stack() {
+        assert_eq!(stack_group(Backend::OpenSsl, "mlkem768"), "MLKEM768");
+        assert_eq!(stack_group(Backend::WolfSsl, "mlkem768"), "ML_KEM_768");
+        // Not in this wolfSSL build, so it must pass through untranslated and be reported
+        // as unsupported rather than silently probed as something else.
+        assert_eq!(
+            stack_group(Backend::WolfSsl, "SecP256r1MLKEM768"),
+            "SecP256r1MLKEM768"
+        );
+        assert_eq!(stack_group(Backend::OpenSsl, "secp256r1"), "P-256");
+        // Anything the table does not know is passed through untouched, which is how the
+        // long tail (frodo, bike, ...) keeps working.
+        assert_eq!(stack_group(Backend::OpenSsl, "frodo640aes"), "frodo640aes");
     }
 
     #[test]
@@ -653,10 +880,18 @@ Content-Type: application/json
 
 {}
 ";
-        let response = parse_openssl("openssl", &request(&["X25519MLKEM768"], &["mldsa65"]), stdout, "");
+        let response = parse_openssl(
+            "openssl",
+            &request(&["X25519MLKEM768"], &["mldsa65"]),
+            stdout,
+            "",
+        );
         assert!(response.handshake_success);
         assert_eq!(response.negotiated.group.as_deref(), Some("X25519MLKEM768"));
-        assert_eq!(response.negotiated.cipher_suite.as_deref(), Some("TLS_AES_256_GCM_SHA384"));
+        assert_eq!(
+            response.negotiated.cipher_suite.as_deref(),
+            Some("TLS_AES_256_GCM_SHA384")
+        );
         assert_eq!(response.failed_stage, Stage::Complete);
         assert_eq!(response.http.as_ref().unwrap().status, 200);
         assert_eq!(response.evidence.bytes_sent, 1234);
@@ -667,11 +902,130 @@ Content-Type: application/json
     #[test]
     fn openssl_alert_number_becomes_a_name() {
         let stderr = "40D0F3:error:0A000410:SSL routines:ssl3_read_bytes:sslv3 alert handshake failure:ssl/record/rec_layer_s3.c:907:SSL alert number 40";
-        let response = parse_openssl("openssl", &request(&["P-256"], &["mldsa44"]), "CONNECTED(3)\n", stderr);
+        let response = parse_openssl(
+            "openssl",
+            &request(&["P-256"], &["mldsa44"]),
+            "CONNECTED(3)\n",
+            stderr,
+        );
         assert!(!response.handshake_success);
-        assert_eq!(response.alert.as_ref().unwrap().description, "handshake_failure");
+        assert_eq!(
+            response.alert.as_ref().unwrap().description,
+            "handshake_failure"
+        );
         assert_eq!(response.failed_stage, Stage::TlsHandshake);
         assert_eq!(response.messages[1].kind, "Alert");
+    }
+
+    #[test]
+    fn classical_group_is_read_from_the_temp_key_line() {
+        // OpenSSL names the classical group only here, and the KEM priority probe needs it:
+        // without a group name the probe loop cannot tell what the server just chose and
+        // stops early, truncating the recovered preference order.
+        let stdout = "\
+CONNECTED(00000003)
+Peer Temp Key: X25519, 253 bits
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+Protocol: TLSv1.3
+";
+        let response = parse_openssl("openssl", &request(&["x25519"], &[]), stdout, "");
+        assert!(response.handshake_success);
+        assert_eq!(response.negotiated.group.as_deref(), Some("X25519"));
+    }
+
+    #[test]
+    fn nist_curves_report_the_curve_not_the_mechanism() {
+        let stdout = "\
+CONNECTED(00000003)
+Peer Temp Key: ECDH, P-256, 256 bits
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+Protocol: TLSv1.3
+";
+        let response = parse_openssl("openssl", &request(&["P-256"], &[]), stdout, "");
+        assert_eq!(response.negotiated.group.as_deref(), Some("P-256"));
+    }
+
+    #[test]
+    fn placeholder_cipher_and_group_do_not_count_as_a_handshake() {
+        // What OpenSSL actually prints when the server rejects the offer: a protocol line,
+        // a "(NONE)" cipher and a "<NULL>" group. Treating that as success once made every
+        // failing subtask show up green.
+        let stdout = "\
+CONNECTED(00000003)
+Negotiated TLS1.3 group: <NULL>
+SSL handshake has read 7 bytes and written 1388 bytes
+New, (NONE), Cipher is (NONE)
+Protocol: TLSv1.3
+";
+        let stderr = "error:0A000410:SSL routines:ssl3_read_bytes:ssl/tls alert handshake failure:SSL alert number 40";
+        let response = parse_openssl(
+            "openssl",
+            &request(&["X25519MLKEM768"], &["mldsa65"]),
+            stdout,
+            stderr,
+        );
+        assert!(!response.handshake_success);
+        assert_eq!(response.negotiated.cipher_suite, None);
+        assert_eq!(response.negotiated.group, None);
+        assert_eq!(
+            response.alert.as_ref().unwrap().description,
+            "handshake_failure"
+        );
+    }
+
+    #[test]
+    fn wolfssl_classical_probe_omits_the_pqc_flag() {
+        let classical = wolfssl_args(&request(&["P-256"], &[]));
+        assert!(!classical.contains(&"--pqc".to_string()), "{classical:?}");
+        let pq = wolfssl_args(&request(&["mlkem768"], &[]));
+        assert!(
+            pq.windows(2).any(|w| w == ["--pqc", "ML_KEM_768"]),
+            "{pq:?}"
+        );
+    }
+
+    #[test]
+    fn boringssl_summary_is_read_from_stderr() {
+        // bssl prints the summary on stderr and the application data on stdout; reading only
+        // stdout made every BoringSSL probe look like a handshake failure.
+        let stderr = "\
+Connecting to 172.20.0.2:11000
+Connected.
+  Version: TLSv1.3
+  Cipher: TLS_AES_128_GCM_SHA256
+  ECDHE group: X25519MLKEM768
+  Signature algorithm: ecdsa_secp256r1_sha256
+  Cert subject: CN = tls-good.lab
+  Cert issuer: CN = tls-good.lab
+";
+        let stdout = "HTTP/1.0 200 ok\r\nContent-type: text/html\r\n\r\n<html>";
+        let response = parse_boringssl(
+            "boringssl",
+            &request(&["X25519MLKEM768"], &[]),
+            stdout,
+            stderr,
+        );
+        assert!(response.handshake_success);
+        assert_eq!(response.negotiated.group.as_deref(), Some("X25519MLKEM768"));
+        assert_eq!(response.cert_chain.len(), 1);
+        assert_eq!(response.http.as_ref().unwrap().status, 200);
+        assert_eq!(response.failed_stage, Stage::Complete);
+    }
+
+    #[test]
+    fn wolfssl_prefers_the_post_quantum_group_over_the_curve() {
+        let stdout = "\
+Using Post-Quantum KEM: ML_KEM_768
+SSL version is TLSv1.3
+SSL cipher suite is TLS_AES_256_GCM_SHA384
+SSL curve name is SECP384R1
+SSL connect ok, sending GET...
+HTTP/1.0 200 ok
+
+";
+        let response = parse_wolfssl("wolfssl", &request(&["mlkem768"], &[]), stdout, "");
+        assert!(response.handshake_success);
+        assert_eq!(response.negotiated.group.as_deref(), Some("ML_KEM_768"));
     }
 
     #[test]
@@ -693,7 +1047,8 @@ Content-Type: application/json
 
     #[test]
     fn http_block_parsing_stops_at_the_blank_line() {
-        let http = parse_http("HTTP/1.1 404 Not Found\r\nServer: nginx/1.28.1\r\n\r\nbody here").unwrap();
+        let http =
+            parse_http("HTTP/1.1 404 Not Found\r\nServer: nginx/1.28.1\r\n\r\nbody here").unwrap();
         assert_eq!(http.status, 404);
         assert_eq!(http.headers.len(), 1);
         assert_eq!(http.body_excerpt.as_deref(), Some("body here"));

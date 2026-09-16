@@ -163,6 +163,7 @@ export function KemRunner({
               {t("targetEndpoint")}
             </span>
             <select
+              aria-label={t("targetEndpoint")}
               className="mt-2 w-full rounded border-2 border-slate-800 bg-white px-4 py-3 font-medium"
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}

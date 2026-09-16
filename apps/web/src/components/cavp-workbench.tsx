@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { buildResultsSkeleton } from "@/lib/cavp";
 import { countLinesAndChars } from "@/lib/format";
 import { computeCase, type ComputeInput } from "@/lib/mldsa";
 import type { CavpPack, CavpValidationReport, Capability } from "@/lib/types";
@@ -37,7 +38,7 @@ export function CavpWorkbench({ pack }: { pack: CavpPack }) {
   const [computed, setComputed] = useState<string | null>(null);
   const [computeError, setComputeError] = useState<string | null>(null);
 
-  const [results, setResults] = useState(() => skeleton(pack));
+  const [results, setResults] = useState(() => buildResultsSkeleton(pack));
   const [report, setReport] = useState<CavpValidationReport | null>(null);
   const [validating, setValidating] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -310,45 +311,4 @@ export function CavpWorkbench({ pack }: { pack: CavpPack }) {
 async function errorText(response: Response): Promise<string> {
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   return body.error ?? response.statusText;
-}
-
-/**
- * Pre-fill step 04 with the ACVP results envelope: tcId 1 carries the worked example the
- * API hands out, the rest are blanks for the student to fill in.
- */
-function skeleton(pack: CavpPack): string {
-  const tests = pack.prompt.testGroups[0]?.tests ?? [];
-  const example = (pack.example ?? {}) as Record<string, unknown>;
-
-  const blank = (tcId: number): Record<string, unknown> => {
-    if (tcId === 1 && Object.keys(example).length > 0) {
-      const { tcId: _ignored, ...answer } = example;
-      return { tcId, ...answer };
-    }
-    switch (pack.capability) {
-      case "key_gen":
-        return { tcId, pk: "", sk: "" };
-      case "sig_gen":
-        return { tcId, signature: "" };
-      case "sig_ver":
-        return { tcId, testPassed: null };
-    }
-  };
-
-  return JSON.stringify(
-    {
-      vsId: pack.vsId,
-      algorithm: pack.prompt.algorithm,
-      mode: pack.prompt.mode,
-      revision: pack.prompt.revision,
-      testGroups: [
-        {
-          tgId: pack.prompt.testGroups[0]?.tgId ?? 1,
-          tests: tests.map((test) => blank(Number(test.tcId))),
-        },
-      ],
-    },
-    null,
-    2,
-  );
 }

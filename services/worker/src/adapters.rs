@@ -80,7 +80,9 @@ impl AdapterRegistry {
             .send()
             .await
         {
-            Err(err) => ProbeResponse::failure(adapter, Stage::Tcp, format!("adapter unreachable: {err}")),
+            Err(err) => {
+                ProbeResponse::failure(adapter, Stage::Tcp, format!("adapter unreachable: {err}"))
+            }
             Ok(response) => {
                 let status = response.status();
                 if !status.is_success() {

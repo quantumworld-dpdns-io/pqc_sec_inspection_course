@@ -1,0 +1,99 @@
+name: deploy
+
+on:
+  workflow_run:
+    workflows: [images]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy (defaults to the commit that triggered images)
+        required: false
+        type: string
+
+concurrency:
+  group: deploy-lab
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # The lab host sits on a private LAN, so the job runs on a self-hosted runner installed
+    # there instead of reaching in from a GitHub-hosted runner.
+    runs-on: [self-hosted, pqc-lab]
+    environment: lab
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          TAG="${{ inputs.tag }}"
+          if [ -z "$TAG" ]; then
+            TAG="sha-${{ github.event.workflow_run.head_sha || github.sha }}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Record the currently running tag
+        id: previous
+        run: |
+          PREV=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' pqcas-api-1 2>/dev/null || echo "")
+          echo "tag=$PREV" >> "$GITHUB_OUTPUT"
+
+      - name: Pull and roll forward
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cp -n deploy/.env.example deploy/.env || true
+          docker compose -f deploy/compose.yml -f deploy/compose.prod.yml pull
+          # Migrations and seeds are one-shot and idempotent; they must succeed before the
+          # API rolls forward, or a new binary could meet an old schema.
+          docker compose -f deploy/compose.yml -f deploy/compose.prod.yml run --rm api-migrate
+          docker compose -f deploy/compose.yml -f deploy/compose.prod.yml run --rm api-seed
+          docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d --remove-orphans
+
+      - name: Wait for readiness
+        id: health
+        run: |
+          for _ in $(seq 1 40); do
+            if curl -fsS "http://localhost:${HTTP_PORT:-8088}/readyz" | grep -q '"ready":true'; then
+              echo "ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Smoke test one probe
+        run: |
+          set -euo pipefail
+          BASE="http://localhost:${HTTP_PORT:-8088}"
+          TEST_ID=$(curl -fsS -X POST "$BASE/api/v1/tests" \
+            -H 'content-type: application/json' \
+            -d '{"host":"tls-good","port":11000,"httpPath":"/","tool":"pq-dsa","plugin":"open3x","groups":["X25519MLKEM768"],"sigAlgs":["mldsa65"]}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          for _ in $(seq 1 30); do
+            STATUS=$(curl -fsS "$BASE/api/v1/tests/$TEST_ID" | python3 -c 'import json,sys; print(json.load(sys.stdin)["status"])')
+            [ "$STATUS" = "finished" ] && exit 0
+            sleep 2
+          done
+          exit 1
+
+      - name: Roll back on failure
+        if: failure() && steps.previous.outputs.tag != ''
+        env:
+          REGISTRY: ghcr.io/${{ github.repository_owner }}
+          TAG: ${{ steps.previous.outputs.tag }}
+        run: |
+          echo "deploy failed; rolling back to $TAG"
+          docker compose -f deploy/compose.yml -f deploy/compose.prod.yml up -d
+
+      - name: Report
+        if: always()
+        run: docker compose -f deploy/compose.yml -f deploy/compose.prod.yml ps

@@ -1,0 +1,10 @@
+# A healthy PQC-capable TLS target. Debian trixie ships OpenSSL 3.5, so ML-KEM groups are
+# available without any extra provider.
+FROM debian:trixie-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
+COPY entrypoint-good.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 11000 11001
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

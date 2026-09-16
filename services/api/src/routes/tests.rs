@@ -192,7 +192,11 @@ async fn reject_unknown(state: &AppState, kind: &str, names: &[String]) -> ApiRe
     if !unknown.is_empty() {
         return Err(ApiError::BadRequest(format!(
             "unknown {kind}: {}",
-            unknown.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            unknown
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         )));
     }
     Ok(())
@@ -285,7 +289,11 @@ pub async fn get_matrix(
         })
         .collect();
 
-    Ok(Json(Matrix { groups, sig_algs, cells }))
+    Ok(Json(Matrix {
+        groups,
+        sig_algs,
+        cells,
+    }))
 }
 
 pub async fn events(
@@ -311,7 +319,7 @@ async fn fetch_test(state: &AppState, id: Uuid) -> ApiResult<Test> {
 }
 
 #[cfg(test)]
-mod tests {
+mod unit_tests {
     use super::*;
 
     #[test]
@@ -323,7 +331,15 @@ mod tests {
 
     #[test]
     fn duplicate_selections_collapse() {
-        let input = vec!["mldsa65".into(), " mldsa65 ".into(), "mldsa44".into(), "".into()];
-        assert_eq!(dedupe(&input), vec!["mldsa65".to_string(), "mldsa44".to_string()]);
+        let input = vec![
+            "mldsa65".into(),
+            " mldsa65 ".into(),
+            "mldsa44".into(),
+            "".into(),
+        ];
+        assert_eq!(
+            dedupe(&input),
+            vec!["mldsa65".to_string(), "mldsa44".to_string()]
+        );
     }
 }

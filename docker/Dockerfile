@@ -9,7 +9,7 @@
 #   docker build --target web      -t pqcas-web .
 #   docker build --target adapter-openssl -t pqcas-adapter-openssl .
 #
-ARG RUST_VERSION=1.83
+ARG RUST_VERSION=1.90
 ARG DEBIAN_RELEASE=trixie
 ARG NODE_VERSION=22
 ARG GO_VERSION=1.25
@@ -90,11 +90,14 @@ RUN git clone --depth 1 --branch ${BORINGSSL_REF} https://boringssl.googlesource
 FROM runtime-base AS adapter-boringssl
 COPY --from=boringssl-builder /src/build/bssl /usr/local/bin/bssl
 COPY --from=rust-builder /out/pqcas-adapter /usr/local/bin/pqcas-adapter
+# BoringSSL ships the hybrid only: standalone ML-KEM groups are rejected with
+# UNSUPPORTED_ELLIPTIC_CURVE, so they are advertised as unsupported rather than probed and
+# then blamed on the target.
 ENV ADAPTER_BACKEND=boringssl \
     ADAPTER_NAME=boringssl \
     ADAPTER_CLIENT_BIN=bssl \
     ADAPTER_BIND=0.0.0.0:9100 \
-    ADAPTER_KEM_GROUPS="X25519MLKEM768,MLKEM768,MLKEM1024,x25519,P-256,P-384,P-521" \
+    ADAPTER_KEM_GROUPS="X25519MLKEM768,x25519,P-256,P-384,P-521" \
     ADAPTER_SIG_ALGS="ecdsa_secp256r1_sha256,ed25519,rsa_pss_rsae_sha256"
 EXPOSE 9100
 USER pqcas
@@ -116,13 +119,19 @@ RUN git clone --depth 1 --branch ${WOLFSSL_REF} https://github.com/wolfSSL/wolfs
 FROM runtime-base AS adapter-wolfssl
 COPY --from=wolfssl-builder /src/examples/client/.libs/client /usr/local/bin/wolfssl-client
 COPY --from=wolfssl-builder /src/src/.libs/ /usr/local/lib/
+# The example client walks up from its working directory looking for `certs/`, and refuses
+# to start ("wolf root not found") without it.
+COPY --from=wolfssl-builder /src/certs /opt/wolfssl/certs
 RUN ldconfig
 COPY --from=rust-builder /out/pqcas-adapter /usr/local/bin/pqcas-adapter
+# This wolfSSL build pairs its hybrids differently from the TLS registry (P256_ML_KEM_512
+# rather than SecP256r1MLKEM768), so only the standalone ML-KEM groups are advertised.
 ENV ADAPTER_BACKEND=wolfssl \
     ADAPTER_NAME=wolfssl \
     ADAPTER_CLIENT_BIN=wolfssl-client \
+    ADAPTER_WORKDIR=/opt/wolfssl \
     ADAPTER_BIND=0.0.0.0:9100 \
-    ADAPTER_KEM_GROUPS="X25519MLKEM768,MLKEM512,MLKEM768,MLKEM1024,x25519,P-256,P-384" \
+    ADAPTER_KEM_GROUPS="MLKEM512,MLKEM768,MLKEM1024,x25519,P-256,P-384" \
     ADAPTER_SIG_ALGS="mldsa44,mldsa65,mldsa87,ecdsa_secp256r1_sha256"
 EXPOSE 9100
 USER pqcas

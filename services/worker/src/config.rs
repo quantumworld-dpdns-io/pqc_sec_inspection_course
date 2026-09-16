@@ -45,8 +45,7 @@ impl Config {
                 let (name, url) = entry.split_once('=')?;
                 let name = name.trim();
                 let url = url.trim().trim_end_matches('/');
-                (!name.is_empty() && !url.is_empty())
-                    .then(|| (name.to_string(), url.to_string()))
+                (!name.is_empty() && !url.is_empty()).then(|| (name.to_string(), url.to_string()))
             })
             .collect()
     }

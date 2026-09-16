@@ -29,7 +29,9 @@ pub async fn list_algorithms(
 ) -> ApiResult<Json<Vec<Algorithm>>> {
     if let Some(kind) = &query.kind {
         if kind != "kem_group" && kind != "sig_alg" {
-            return Err(ApiError::BadRequest(format!("unknown algorithm kind {kind}")));
+            return Err(ApiError::BadRequest(format!(
+                "unknown algorithm kind {kind}"
+            )));
         }
     }
 

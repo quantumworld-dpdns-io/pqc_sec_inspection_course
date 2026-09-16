@@ -126,13 +126,20 @@ mod tests {
     #[test]
     fn capability_maps_to_acvp_spelling() {
         assert_eq!(Capability::SigGen.acvp_mode(), "sigGen");
-        assert_eq!(Capability::from_acvp_mode("sigVer"), Some(Capability::SigVer));
+        assert_eq!(
+            Capability::from_acvp_mode("sigVer"),
+            Some(Capability::SigVer)
+        );
         assert_eq!(Capability::from_acvp_mode("nope"), None);
     }
 
     #[test]
     fn statuses_round_trip_through_strings() {
-        for status in [ResultStatus::Passed, ResultStatus::Unsupported, ResultStatus::Disabled] {
+        for status in [
+            ResultStatus::Passed,
+            ResultStatus::Unsupported,
+            ResultStatus::Disabled,
+        ] {
             assert_eq!(status.as_str().parse::<ResultStatus>().unwrap(), status);
         }
     }

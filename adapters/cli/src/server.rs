@@ -21,7 +21,10 @@ struct AppState {
 pub async fn serve(config: Config) -> anyhow::Result<()> {
     let backend = Backend::parse(&config.backend)?;
     let bind = config.bind.clone();
-    let state = AppState { config: Arc::new(config), backend };
+    let state = AppState {
+        config: Arc::new(config),
+        backend,
+    };
 
     let app = Router::new()
         .route("/healthz", get(healthz))

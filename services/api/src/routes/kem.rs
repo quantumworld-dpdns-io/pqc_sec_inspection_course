@@ -155,7 +155,12 @@ pub async fn get_run(
     .fetch_all(state.db())
     .await?;
 
-    Ok(Json(KemRunDetail { run, endpoint, logs, cells }))
+    Ok(Json(KemRunDetail {
+        run,
+        endpoint,
+        logs,
+        cells,
+    }))
 }
 
 pub async fn events(

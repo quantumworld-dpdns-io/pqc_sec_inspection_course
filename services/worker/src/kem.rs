@@ -36,8 +36,23 @@ pub const MATRIX_KEMS: [&str; 6] = [
 
 /// Groups that provide no post-quantum protection. Ordering *within* this set is not a PQC
 /// finding; a PQ group listed after any of them is.
-const CLASSICAL: [&str; 7] = [
-    "x25519", "x448", "secp256r1", "secp384r1", "secp521r1", "P-256", "P-384",
+///
+/// The spellings are deliberately redundant: a recovered order carries whatever name the
+/// stack reported, and OpenSSL alone calls P-256 `prime256v1` in its temp-key line. A
+/// classical curve that fails to match here is misread as post-quantum and produces a bogus
+/// "higher security placed later" finding.
+const CLASSICAL: [&str; 11] = [
+    "x25519",
+    "x448",
+    "secp256r1",
+    "secp384r1",
+    "secp521r1",
+    "prime256v1",
+    "prime384v1",
+    "prime521v1",
+    "p-256",
+    "p-384",
+    "p-521",
 ];
 
 /// Coarse security level used for the descending-order check among PQ groups.
@@ -56,7 +71,7 @@ fn pq_level(group: &str) -> Option<u8> {
 
 fn is_classical(group: &str) -> bool {
     let g = group.to_ascii_lowercase();
-    CLASSICAL.iter().any(|c| c.to_ascii_lowercase() == g)
+    CLASSICAL.contains(&g.as_str())
 }
 
 pub struct Console<'a> {
@@ -68,7 +83,12 @@ pub struct Console<'a> {
 
 impl<'a> Console<'a> {
     pub fn new(db: &'a PgPool, redis: &'a mut ConnectionManager, run_id: Uuid) -> Self {
-        Self { db, redis, run_id, seq: 0 }
+        Self {
+            db,
+            redis,
+            run_id,
+            seq: 0,
+        }
     }
 
     pub async fn log(&mut self, level: &str, message: impl Into<String>) -> anyhow::Result<()> {
@@ -142,7 +162,9 @@ impl<'a> Console<'a> {
             .bind(status)
             .execute(self.db)
             .await?;
-        let event = KemEvent::Finished { run_id: self.run_id };
+        let event = KemEvent::Finished {
+            run_id: self.run_id,
+        };
         let _: i64 = self
             .redis
             .publish(kem_channel(self.run_id), serde_json::to_string(&event)?)
@@ -172,7 +194,9 @@ pub async fn handle(
     match outcome {
         Ok(()) => console.finish(TaskStatus::Finished).await?,
         Err(err) => {
-            console.log("result", format!("Result: RunFailed - {err}")).await?;
+            console
+                .log("result", format!("Result: RunFailed - {err}"))
+                .await?;
             console.finish(TaskStatus::Failed).await?;
         }
     }
@@ -197,13 +221,18 @@ async fn library_compat(
     job: &KemJob,
 ) -> anyhow::Result<()> {
     console
-        .log("info", format!("=== run_library_compat ({}:{}) ===", job.host, job.port))
+        .log(
+            "info",
+            format!("=== run_library_compat ({}:{}) ===", job.host, job.port),
+        )
         .await?;
 
     for kem in MATRIX_KEMS {
         for adapter in MATRIX_ADAPTERS {
             if !adapters.is_configured(adapter) {
-                console.cell(kem, adapter, ResultStatus::Disabled, None).await?;
+                console
+                    .cell(kem, adapter, ResultStatus::Disabled, None)
+                    .await?;
                 continue;
             }
 
@@ -211,17 +240,24 @@ async fn library_compat(
                 Ok(caps) => caps.kem_groups.iter().any(|g| g.eq_ignore_ascii_case(kem)),
                 Err(err) => {
                     console
-                        .log("info", format!("{adapter}: capabilities unavailable ({err})"))
+                        .log(
+                            "info",
+                            format!("{adapter}: capabilities unavailable ({err})"),
+                        )
                         .await?;
                     false
                 }
             };
             if !supported {
-                console.cell(kem, adapter, ResultStatus::Unsupported, None).await?;
+                console
+                    .cell(kem, adapter, ResultStatus::Unsupported, None)
+                    .await?;
                 continue;
             }
 
-            let response = adapters.probe(adapter, &request_for(job, vec![kem.to_string()])).await;
+            let response = adapters
+                .probe(adapter, &request_for(job, vec![kem.to_string()]))
+                .await;
             let verdict = if response.handshake_success {
                 ResultStatus::Passed
             } else {
@@ -235,14 +271,20 @@ async fn library_compat(
                     "info",
                     format!(
                         "{adapter} × {kem}: {}",
-                        if response.handshake_success { "PASS" } else { "FAIL" }
+                        if response.handshake_success {
+                            "PASS"
+                        } else {
+                            "FAIL"
+                        }
                     ),
                 )
                 .await?;
         }
     }
 
-    console.log("result", "Result: compatibility matrix complete").await?;
+    console
+        .log("result", "Result: compatibility matrix complete")
+        .await?;
     Ok(())
 }
 
@@ -254,39 +296,56 @@ async fn group_compat(
 ) -> anyhow::Result<()> {
     let adapter = preferred_adapter(adapters)?;
     console
-        .log("info", format!("=== run_full_handshake ({}:{}) ===", job.host, job.port))
+        .log(
+            "info",
+            format!("=== run_full_handshake ({}:{}) ===", job.host, job.port),
+        )
         .await?;
     console
         .log("info", format!("Using KEMs: {}", job.kem_groups.join(", ")))
         .await?;
 
-    let response = adapters.probe(&adapter, &request_for(job, job.kem_groups.clone())).await;
+    let response = adapters
+        .probe(&adapter, &request_for(job, job.kem_groups.clone()))
+        .await;
 
     if !response.handshake_success {
         console.log("info", "key_gen TLS 完整交握失敗：").await?;
+        // Prefer the alert name: "handshake_failure" tells a student what happened, where
+        // the raw OpenSSL error string tells them which C file it happened in.
+        let reason = response
+            .alert
+            .as_ref()
+            .map(|alert| alert.description.clone())
+            .or_else(|| response.error_summary.clone())
+            .unwrap_or_else(|| "unknown".into());
         console
-            .log(
-                "result",
-                format!(
-                    "Result: HandshakeFailed - {}",
-                    response.error_summary.clone().unwrap_or_else(|| "unknown".into())
-                ),
-            )
+            .log("result", format!("Result: HandshakeFailed - {reason}"))
             .await?;
         return Ok(());
     }
 
     if let Some(http) = &response.http {
-        console.log("info", "========== HTTPS response header ==========").await?;
         console
-            .log("info", format!("HTTP/1.1 {} {}", http.status, status_text(http.status)))
+            .log("info", "========== HTTPS response header ==========")
+            .await?;
+        console
+            .log(
+                "info",
+                format!("HTTP/1.1 {} {}", http.status, status_text(http.status)),
+            )
             .await?;
         for header in &http.headers {
             console
-                .log("info", format!("{}: {}", header.label, header.values.join(", ")))
+                .log(
+                    "info",
+                    format!("{}: {}", header.label, header.values.join(", ")),
+                )
                 .await?;
         }
-        console.log("info", "========== HTTPS response header ==========").await?;
+        console
+            .log("info", "========== HTTPS response header ==========")
+            .await?;
         console.log("info", "response success").await?;
     }
 
@@ -297,9 +356,21 @@ async fn group_compat(
 fn result_line(response: &ProbeResponse) -> String {
     format!(
         "Result: ApplicationData - {} {}; group={}; sent={} bytes; received={} bytes",
-        response.negotiated.tls_version.clone().unwrap_or_else(|| "unknown".into()),
-        response.negotiated.cipher_suite.clone().unwrap_or_else(|| "unknown".into()),
-        response.negotiated.group.clone().unwrap_or_else(|| "unknown".into()),
+        response
+            .negotiated
+            .tls_version
+            .clone()
+            .unwrap_or_else(|| "unknown".into()),
+        response
+            .negotiated
+            .cipher_suite
+            .clone()
+            .unwrap_or_else(|| "unknown".into()),
+        response
+            .negotiated
+            .group
+            .clone()
+            .unwrap_or_else(|| "unknown".into()),
         response.evidence.bytes_sent,
         response.evidence.bytes_received,
     )
@@ -328,7 +399,10 @@ async fn priority(
 ) -> anyhow::Result<()> {
     let adapter = preferred_adapter(adapters)?;
     console
-        .log("info", format!("=== run_priority_test ({}:{}) ===", job.host, job.port))
+        .log(
+            "info",
+            format!("=== run_priority_test ({}:{}) ===", job.host, job.port),
+        )
         .await?;
     console.log("info", "=== 演算法指定順序測試 ===").await?;
 
@@ -343,11 +417,15 @@ async fn priority(
     // Each round removes exactly the group the server chose, so the loop is bounded by the
     // offer list even if a server answers with something it was not offered.
     while !remaining.is_empty() {
-        let response = adapters.probe(&adapter, &request_for(job, remaining.clone())).await;
+        let response = adapters
+            .probe(&adapter, &request_for(job, remaining.clone()))
+            .await;
         if !response.handshake_success {
             break;
         }
-        let Some(group) = response.negotiated.group.clone() else { break };
+        let Some(group) = response.negotiated.group.clone() else {
+            break;
+        };
         console.log("info", group.clone()).await?;
         order.push(group.clone());
         let before = remaining.len();
@@ -360,12 +438,18 @@ async fn priority(
     let findings = evaluate_order(&order);
     if findings.is_empty() {
         console
-            .log("finding_ok", "[+] 伺服器的演算法指定順序符合安全性等級從高到低的最佳實踐")
+            .log(
+                "finding_ok",
+                "[+] 伺服器的演算法指定順序符合安全性等級從高到低的最佳實踐",
+            )
             .await?;
     } else {
         for group in &findings {
             console
-                .log("finding_warn", format!("[-] 伺服器將安全性較高演算法放在後面：{group}"))
+                .log(
+                    "finding_warn",
+                    format!("[-] 伺服器將安全性較高演算法放在後面：{group}"),
+                )
                 .await?;
         }
     }
@@ -375,7 +459,11 @@ async fn priority(
             "result",
             format!(
                 "Final Order: [{}]",
-                order.iter().map(|g| format!("\"{g}\"")).collect::<Vec<_>>().join(",")
+                order
+                    .iter()
+                    .map(|g| format!("\"{g}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
             ),
         )
         .await?;
@@ -394,9 +482,11 @@ pub fn evaluate_order(order: &[String]) -> Vec<String> {
         match pq_level(group) {
             None => seen_classical = true,
             Some(level) => {
-                if seen_classical {
-                    findings.push(group.clone());
-                } else if best_pq_so_far.is_some_and(|best| level > best) {
+                // Two ways to be misplaced: behind a classical group, or behind a weaker
+                // post-quantum one. Both mean the server prefers less security first.
+                let behind_classical = seen_classical;
+                let behind_weaker_pq = best_pq_so_far.is_some_and(|best| level > best);
+                if behind_classical || behind_weaker_pq {
                     findings.push(group.clone());
                 }
                 best_pq_so_far = Some(best_pq_so_far.map_or(level, |best| best.min(level)));
@@ -432,14 +522,28 @@ mod tests {
     #[test]
     fn pq_first_descending_order_is_clean() {
         // The B-server order from the dev system, which it reported as best practice.
-        let order = v(&["MLKEM1024", "MLKEM768", "x25519MLKEM768", "x25519", "secp256r1", "secp384r1"]);
+        let order = v(&[
+            "MLKEM1024",
+            "MLKEM768",
+            "x25519MLKEM768",
+            "x25519",
+            "secp256r1",
+            "secp384r1",
+        ]);
         assert!(evaluate_order(&order).is_empty());
     }
 
     #[test]
     fn pq_after_classical_is_flagged() {
         // The A-server order, which the dev system flagged group by group.
-        let order = v(&["x25519", "secp256r1", "secp384r1", "MLKEM512", "MLKEM768", "MLKEM1024"]);
+        let order = v(&[
+            "x25519",
+            "secp256r1",
+            "secp384r1",
+            "MLKEM512",
+            "MLKEM768",
+            "MLKEM1024",
+        ]);
         let findings = evaluate_order(&order);
         assert_eq!(findings, v(&["MLKEM512", "MLKEM768", "MLKEM1024"]));
     }
@@ -448,6 +552,23 @@ mod tests {
     fn stronger_pq_behind_weaker_pq_is_flagged() {
         let findings = evaluate_order(&v(&["MLKEM768", "MLKEM1024"]));
         assert_eq!(findings, v(&["MLKEM1024"]));
+    }
+
+    #[test]
+    fn openssl_curve_spellings_are_recognised_as_classical() {
+        // Exactly what a priority run against the lab's B server recovers.
+        let order = v(&[
+            "MLKEM1024",
+            "MLKEM768",
+            "X25519MLKEM768",
+            "X25519",
+            "prime256v1",
+        ]);
+        assert!(
+            evaluate_order(&order).is_empty(),
+            "{:?}",
+            evaluate_order(&order)
+        );
     }
 
     #[test]

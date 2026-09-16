@@ -13,7 +13,7 @@ members = [
 version = "0.1.0"
 edition = "2021"
 license = "Apache-2.0"
-rust-version = "1.83"
+rust-version = "1.90"
 
 [workspace.dependencies]
 pqcas-domain = { path = "crates/pqcas-domain" }
@@ -42,7 +42,6 @@ tower-http = { version = "0.6", features = ["trace", "cors", "timeout", "compres
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 utoipa = { version = "5", features = ["axum_extras", "uuid", "chrono"] }
-utoipa-swagger-ui = { version = "8", features = ["axum"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
 [profile.release]

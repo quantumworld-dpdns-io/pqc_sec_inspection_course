@@ -6,9 +6,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::status::{
-    Capability, ExecStatus, KemRunMode, ReportStatus, ResultStatus, TaskStatus,
-};
+use crate::status::{Capability, ExecStatus, KemRunMode, ReportStatus, ResultStatus, TaskStatus};
 
 /// A lab target ("A server", "正常 server", "漏洞 server", ...) shown on the Environment
 /// page and in the KEM DEMO endpoint dropdown.

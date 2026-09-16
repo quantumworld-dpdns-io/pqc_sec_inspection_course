@@ -8,12 +8,10 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 pub async fn mark_subtask_running(db: &PgPool, subtask_id: Uuid) -> anyhow::Result<()> {
-    sqlx::query(
-        "UPDATE subtasks SET exec_status = 'running', started_at = now() WHERE id = $1",
-    )
-    .bind(subtask_id)
-    .execute(db)
-    .await?;
+    sqlx::query("UPDATE subtasks SET exec_status = 'running', started_at = now() WHERE id = $1")
+        .bind(subtask_id)
+        .execute(db)
+        .await?;
     Ok(())
 }
 
@@ -107,11 +105,7 @@ pub async fn save_report(
 }
 
 /// Record a worker-side failure (bad job payload, adapter registry miss) without a report.
-pub async fn mark_subtask_error(
-    db: &PgPool,
-    subtask_id: Uuid,
-    reason: &str,
-) -> anyhow::Result<()> {
+pub async fn mark_subtask_error(db: &PgPool, subtask_id: Uuid, reason: &str) -> anyhow::Result<()> {
     sqlx::query(
         r#"
         UPDATE subtasks
@@ -128,15 +122,18 @@ pub async fn mark_subtask_error(
 }
 
 pub struct TestProgress {
-    pub outstanding: i64,
     pub passed: i64,
     pub failed: i64,
 }
 
 /// Close the test out once nothing is left queued or running.
-pub async fn finish_test_if_done(db: &PgPool, test_id: Uuid) -> anyhow::Result<Option<TestProgress>> {
-    let (outstanding, passed, failed, errored, total) = sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(
-        r#"
+pub async fn finish_test_if_done(
+    db: &PgPool,
+    test_id: Uuid,
+) -> anyhow::Result<Option<TestProgress>> {
+    let (outstanding, passed, failed, errored, total) =
+        sqlx::query_as::<_, (i64, i64, i64, i64, i64)>(
+            r#"
         SELECT
             count(*) FILTER (WHERE exec_status IN ('queued', 'running')),
             count(*) FILTER (WHERE result_status = 'passed'),
@@ -145,10 +142,10 @@ pub async fn finish_test_if_done(db: &PgPool, test_id: Uuid) -> anyhow::Result<O
             count(*)
         FROM subtasks WHERE test_id = $1
         "#,
-    )
-    .bind(test_id)
-    .fetch_one(db)
-    .await?;
+        )
+        .bind(test_id)
+        .fetch_one(db)
+        .await?;
 
     if outstanding > 0 {
         return Ok(None);
@@ -169,5 +166,5 @@ pub async fn finish_test_if_done(db: &PgPool, test_id: Uuid) -> anyhow::Result<O
         .execute(db)
         .await?;
 
-    Ok(Some(TestProgress { outstanding, passed, failed }))
+    Ok(Some(TestProgress { passed, failed }))
 }

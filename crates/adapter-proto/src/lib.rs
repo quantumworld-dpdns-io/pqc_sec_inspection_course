@@ -131,11 +131,17 @@ pub struct MessageField {
 
 impl MessageField {
     pub fn new(label: impl Into<String>, values: Vec<String>) -> Self {
-        Self { label: label.into(), values }
+        Self {
+            label: label.into(),
+            values,
+        }
     }
 
     pub fn single(label: impl Into<String>, value: impl Into<String>) -> Self {
-        Self { label: label.into(), values: vec![value.into()] }
+        Self {
+            label: label.into(),
+            values: vec![value.into()],
+        }
     }
 }
 
@@ -262,10 +268,9 @@ mod tests {
 
     #[test]
     fn probe_request_defaults_are_applied() {
-        let req: ProbeRequest = serde_json::from_str(
-            r#"{"target":{"host":"example.test","port":443}}"#,
-        )
-        .expect("minimal request parses");
+        let req: ProbeRequest =
+            serde_json::from_str(r#"{"target":{"host":"example.test","port":443}}"#)
+                .expect("minimal request parses");
         assert_eq!(req.timeout_ms, 15_000);
         assert_eq!(req.tls_versions, vec!["TLSv1.3", "TLSv1.2"]);
         assert!(!req.capture.raw_records);

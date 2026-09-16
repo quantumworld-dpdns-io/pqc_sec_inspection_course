@@ -1,0 +1,11 @@
+# The 漏洞 server: a target that never completes a post-quantum handshake. It offers only
+# classical groups and caps the protocol at TLS 1.2, so every PQC probe against it fails —
+# which is precisely the lesson.
+FROM debian:trixie-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
+COPY entrypoint-vuln.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+EXPOSE 8888
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

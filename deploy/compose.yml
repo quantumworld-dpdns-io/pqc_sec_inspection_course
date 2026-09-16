@@ -1,0 +1,175 @@
+# Development / lab stack. `make dev` brings this up; the deploy workflow reuses it with
+# compose.prod.yml, which swaps the `build:` sections for pinned GHCR digests.
+name: pqcas
+
+x-rust-build: &rust-build
+  context: ..
+  dockerfile: docker/Dockerfile
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pqcas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pqcas}
+      POSTGRES_DB: ${POSTGRES_DB:-pqcas}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pqcas} -d ${POSTGRES_DB:-pqcas}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: schema first, then the catalog/endpoint/CAVP seeds. Both are idempotent, so
+  # they run on every bring-up and are a no-op when nothing changed.
+  api-migrate:
+    build:
+      <<: *rust-build
+      target: api
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-api:${TAG:-dev}
+    command: ["migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://pqcas:pqcas@postgres:5432/pqcas}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api-seed:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-api:${TAG:-dev}
+    command: ["seed"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://pqcas:pqcas@postgres:5432/pqcas}
+    depends_on:
+      api-migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  api:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-api:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: api
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://pqcas:pqcas@postgres:5432/pqcas}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+      MAX_SUBTASKS_PER_TEST: ${MAX_SUBTASKS_PER_TEST:-512}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api-seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-worker:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://pqcas:pqcas@postgres:5432/pqcas}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # Only the adapters this profile actually starts are listed; anything absent is
+      # reported as 未啟用 (disabled) instead of failing a subtask.
+      ADAPTERS: ${ADAPTERS:-openssl=http://adapter-openssl:9100,go=http://adapter-go:9100}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-8}
+      RUST_LOG: ${RUST_LOG:-info,sqlx=warn}
+    depends_on:
+      api:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  adapter-openssl:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-adapter-openssl:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: adapter-openssl
+    environment:
+      ADAPTER_BACKEND: ${ADAPTER_BACKEND_OPENSSL:-openssl}
+    restart: unless-stopped
+
+  adapter-go:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-adapter-go:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: adapter-go
+    restart: unless-stopped
+
+  # BoringSSL and wolfSSL are built from source and take minutes; they live behind the
+  # `full` profile so a routine `make dev` stays fast. `make dev-full` starts them and
+  # widens ADAPTERS accordingly (see compose.full.yml).
+  adapter-boringssl:
+    profiles: ["full"]
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-adapter-boringssl:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: adapter-boringssl
+    restart: unless-stopped
+
+  adapter-wolfssl:
+    profiles: ["full"]
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-adapter-wolfssl:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: adapter-wolfssl
+    restart: unless-stopped
+
+  web:
+    image: ${REGISTRY:-ghcr.io/pqcas}/pqc-web:${TAG:-dev}
+    build:
+      <<: *rust-build
+      target: web
+    environment:
+      API_INTERNAL_URL: http://api:8080
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "${HTTP_PORT:-8088}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - web
+      - api
+    restart: unless-stopped
+
+  # Lab targets. `tls-good` is a healthy PQC-capable server; `tls-vuln` refuses every
+  # post-quantum group, which is what the 漏洞 server demonstrates.
+  tls-good:
+    build:
+      context: ./targets
+      dockerfile: Dockerfile.tls-good
+    restart: unless-stopped
+
+  tls-vuln:
+    build:
+      context: ./targets
+      dockerfile: Dockerfile.tls-vuln
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:

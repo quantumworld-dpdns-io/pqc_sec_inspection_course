@@ -17,10 +17,7 @@ pub async fn subscribe(
     channel: String,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let client = state.pubsub_client().await.map_err(ApiError::Other)?;
-    let mut pubsub = client
-        .get_async_pubsub()
-        .await
-        .map_err(ApiError::Redis)?;
+    let mut pubsub = client.get_async_pubsub().await.map_err(ApiError::Redis)?;
     pubsub.subscribe(&channel).await.map_err(ApiError::Redis)?;
 
     let stream = async_stream::stream! {

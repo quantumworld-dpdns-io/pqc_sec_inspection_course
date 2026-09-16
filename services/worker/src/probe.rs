@@ -44,7 +44,10 @@ pub async fn handle(
     request.timeout_ms = job.timeout_ms;
     // Raw capture on every subtask would balloon the database; failures are where the
     // evidence panel earns its keep, so ask for it and drop it when the handshake works.
-    request.capture = CaptureOptions { raw_records: true, keylog: false };
+    request.capture = CaptureOptions {
+        raw_records: true,
+        keylog: false,
+    };
 
     let response = adapters.probe(&job.adapter, &request).await;
 
@@ -85,11 +88,7 @@ async fn publish(
     Ok(())
 }
 
-async fn finish(
-    db: &PgPool,
-    redis: &mut ConnectionManager,
-    job: &ProbeJob,
-) -> anyhow::Result<()> {
+async fn finish(db: &PgPool, redis: &mut ConnectionManager, job: &ProbeJob) -> anyhow::Result<()> {
     if let Some(progress) = store::finish_test_if_done(db, job.test_id).await? {
         let event = TestEvent::TestFinished {
             test_id: job.test_id,

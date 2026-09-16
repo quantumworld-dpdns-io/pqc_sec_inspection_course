@@ -70,7 +70,11 @@ fn example_answer(answer_key: &serde_json::Value) -> serde_json::Value {
     answer_key
         .get("cases")
         .and_then(|c| c.as_array())
-        .and_then(|cases| cases.iter().find(|c| c.get("tcId").and_then(|v| v.as_i64()) == Some(1)))
+        .and_then(|cases| {
+            cases
+                .iter()
+                .find(|c| c.get("tcId").and_then(|v| v.as_i64()) == Some(1))
+        })
         .cloned()
         .unwrap_or(serde_json::Value::Null)
 }
@@ -192,11 +196,12 @@ pub async fn validate_session(
         .await?
         .ok_or(ApiError::NotFound("cavp session"))?;
 
-    let answer_key_json =
-        sqlx::query_scalar::<_, serde_json::Value>("SELECT answer_key FROM cavp_packs WHERE id = $1")
-            .bind(pack_id)
-            .fetch_one(state.db())
-            .await?;
+    let answer_key_json = sqlx::query_scalar::<_, serde_json::Value>(
+        "SELECT answer_key FROM cavp_packs WHERE id = $1",
+    )
+    .bind(pack_id)
+    .fetch_one(state.db())
+    .await?;
 
     let answer_key: AnswerKey = serde_json::from_value(answer_key_json)?;
 

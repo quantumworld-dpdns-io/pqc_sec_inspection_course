@@ -1,0 +1,28 @@
+{
+	admin off
+	auto_https off
+}
+
+:80 {
+	encode zstd gzip
+
+	# The API is reached directly rather than through Next, so SSE streams are not buffered
+	# by an extra proxy hop.
+	handle /api/* {
+		reverse_proxy api:8080 {
+			flush_interval -1
+		}
+	}
+
+	handle /healthz {
+		reverse_proxy api:8080
+	}
+
+	handle /readyz {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

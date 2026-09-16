@@ -40,6 +40,11 @@ pub struct Config {
 
     #[arg(long, env = "ADAPTER_VERSION", default_value = "unknown")]
     pub version: String,
+
+    /// Directory to run the client binary from. wolfSSL's example client refuses to start
+    /// unless its working directory contains the `certs/` tree it was built with.
+    #[arg(long, env = "ADAPTER_WORKDIR")]
+    pub workdir: Option<String>,
 }
 
 impl Config {

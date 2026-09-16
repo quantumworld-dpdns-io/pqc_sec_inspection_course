@@ -1,0 +1,6 @@
+# Overlay for `docker compose --profile full`: starts the BoringSSL and wolfSSL adapters and
+# tells the worker about them, so the compatibility matrix fills all four PASS columns.
+services:
+  worker:
+    environment:
+      ADAPTERS: openssl=http://adapter-openssl:9100,go=http://adapter-go:9100,boringssl=http://adapter-boringssl:9100,wolfssl=http://adapter-wolfssl:9100
